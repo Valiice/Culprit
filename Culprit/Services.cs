@@ -14,4 +14,5 @@ public class Services
     [PluginService] public static IGameGui GameGui { get; private set; } = null!;
     [PluginService] public static INotificationManager NotificationManager { get; private set; } = null!;
     [PluginService] public static IPluginLog Log { get; private set; } = null!;
+    [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
 }

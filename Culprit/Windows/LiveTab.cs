@@ -7,12 +7,17 @@ internal sealed class LiveTab
     private readonly Configuration config;
     private readonly Sampler sampler;
     private readonly Roster roster;
+    private readonly ReportBuilder reportBuilder;
+    private DateTime? savedAt;
+    private string? savedPath;
+    private string? saveError;
 
-    public LiveTab(Configuration config, Sampler sampler, Roster roster)
+    public LiveTab(Configuration config, Sampler sampler, Roster roster, ReportBuilder reportBuilder)
     {
         this.config = config;
         this.sampler = sampler;
         this.roster = roster;
+        this.reportBuilder = reportBuilder;
     }
 
     public void Draw()
@@ -49,6 +54,41 @@ internal sealed class LiveTab
             this.sampler.Reset();
         }
 
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Copy report"))
+        {
+            ImGui.SetClipboardText(this.reportBuilder.Build());
+        }
+
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Save report"))
+        {
+            try
+            {
+                this.savedPath = this.reportBuilder.Save();
+                this.savedAt = DateTime.UtcNow;
+                this.saveError = null;
+            }
+            catch (Exception e)
+            {
+                Services.Log.Error(e, "Culprit could not save the report");
+                this.saveError = e.Message;
+                this.savedAt = DateTime.UtcNow;
+            }
+        }
+
+        if (this.savedAt is { } savedAt && DateTime.UtcNow - savedAt < TimeSpan.FromSeconds(5))
+        {
+            if (this.saveError is { } error)
+            {
+                ImGui.TextColored(Colors.Bad, $"Could not save the report: {error}");
+            }
+            else
+            {
+                ImGui.TextDisabled($"Saved to {this.savedPath}");
+            }
+        }
+
         foreach (var status in this.sampler.ProbeStatuses)
         {
             if (status.Available)
@@ -76,12 +116,30 @@ internal sealed class LiveTab
 
     private void DrawTable()
     {
-        var rows = this.roster.Plugins.Values
-            .Where(p => p.InternalName != "Culprit")
-            .Select(p => (Info: p, Window: this.sampler.Engine.Snapshot(p.InternalName), Counters: this.sampler.Store.Counters(p.InternalName)))
-            .OrderByDescending(r => r.Counters.Incidents)
-            .ThenByDescending(r => r.Window?.CurrentAverageMs ?? 0)
-            .ToList();
+        var showAll = this.config.ShowAllPlugins;
+        if (ImGui.Checkbox("Show all plugins", ref showAll))
+        {
+            this.config.ShowAllPlugins = showAll;
+            this.config.Save();
+        }
+
+        if (!showAll)
+        {
+            ImGui.SameLine();
+            ImGui.TextDisabled("Only plugins with an incident, an error, or a 5 s average of 1 ms or more are listed.");
+        }
+
+        var rows = this.reportBuilder.Rows();
+        if (!showAll)
+        {
+            rows = rows.Where(r => r.Incidents > 0 || r.Errors > 0 || r.AverageMs >= 1.0).ToList();
+        }
+
+        if (rows.Count == 0)
+        {
+            ImGui.TextColored(Colors.Good, "No plugin has caused a hiccup yet.");
+            return;
+        }
 
         if (!ImGui.BeginTable("##live", 9, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.BordersInnerV))
         {
@@ -101,47 +159,47 @@ internal sealed class LiveTab
         ImGui.TableHeadersRow();
 
         var stall = this.sampler.Engine.Thresholds.StallMs;
-        foreach (var (info, window, counters) in rows)
+        var sustained = this.sampler.Engine.Thresholds.SustainedMs;
+        foreach (var row in rows)
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            var ignored = this.sampler.Engine.Ignored.Contains(info.InternalName);
-            if (ignored)
+            if (row.Ignored)
             {
-                ImGui.TextColored(Colors.Dim, info.DisplayName);
+                ImGui.TextColored(Colors.Dim, row.DisplayName);
             }
             else
             {
-                ImGui.TextUnformatted(info.DisplayName);
+                ImGui.TextUnformatted(row.DisplayName);
             }
 
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip(info.InternalName + (info.IsDev ? " (dev plugin)" : string.Empty));
+                ImGui.SetTooltip(row.InternalName);
             }
 
-            Ms(window?.LastDrawMs, stall);
-            Ms(window?.LongestDrawMs, stall);
-            Ms(window?.LastUpdateMs, stall);
-            Ms(window?.LongestUpdateMs, stall);
-            Ms(window?.CurrentAverageMs, this.sampler.Engine.Thresholds.SustainedMs);
+            Ms(row.LastDrawMs, stall);
+            Ms(row.LongestDrawMs, stall);
+            Ms(row.LastUpdateMs, stall);
+            Ms(row.LongestUpdateMs, stall);
+            Ms(row.AverageMs, sustained);
 
             ImGui.TableNextColumn();
-            Count(counters.Errors);
+            Count(row.Errors);
             ImGui.TableNextColumn();
-            Count(counters.Incidents);
+            Count(row.Incidents);
 
             ImGui.TableNextColumn();
-            var ignore = ignored;
-            if (ImGui.Checkbox($"##ignore{info.InternalName}", ref ignore))
+            var ignore = row.Ignored;
+            if (ImGui.Checkbox($"##ignore{row.InternalName}", ref ignore))
             {
                 if (ignore)
                 {
-                    this.config.IgnoredPlugins.Add(info.InternalName);
+                    this.config.IgnoredPlugins.Add(row.InternalName);
                 }
                 else
                 {
-                    this.config.IgnoredPlugins.RemoveAll(n => string.Equals(n, info.InternalName, StringComparison.OrdinalIgnoreCase));
+                    this.config.IgnoredPlugins.RemoveAll(n => string.Equals(n, row.InternalName, StringComparison.OrdinalIgnoreCase));
                 }
 
                 this.config.Save();
@@ -152,17 +210,11 @@ internal sealed class LiveTab
         ImGui.EndTable();
     }
 
-    private static void Ms(double? value, double limit)
+    private static void Ms(double value, double limit)
     {
         ImGui.TableNextColumn();
-        if (value is not { } v)
-        {
-            ImGui.TextDisabled("-");
-            return;
-        }
-
-        var text = v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
-        if (v > limit)
+        var text = value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+        if (value > limit)
         {
             ImGui.TextColored(Colors.Bad, text);
         }

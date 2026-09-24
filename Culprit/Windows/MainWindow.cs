@@ -13,7 +13,8 @@ internal sealed class MainWindow : Window
     public MainWindow(Configuration config, Sampler sampler, Roster roster)
         : base("Culprit###CulpritMain")
     {
-        this.liveTab = new LiveTab(config, sampler, roster);
+        this.ReportBuilder = new ReportBuilder(config, sampler, roster);
+        this.liveTab = new LiveTab(config, sampler, roster, this.ReportBuilder);
         this.incidentsTab = new IncidentsTab(sampler, roster);
         this.settingsTab = new SettingsTab(config, sampler, roster);
         this.SizeConstraints = new WindowSizeConstraints
@@ -21,6 +22,8 @@ internal sealed class MainWindow : Window
             MinimumSize = new Vector2(640, 400),
         };
     }
+
+    public ReportBuilder ReportBuilder { get; }
 
     public override void Draw()
     {

@@ -45,7 +45,7 @@ public sealed class Plugin : IDalamudPlugin
 
             Services.CommandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
             {
-                HelpMessage = "Open Culprit. \"/culprit pause\" and \"/culprit resume\" toggle detection, \"/culprit reset\" clears counters.",
+                HelpMessage = "Open Culprit. \"/culprit pause\" and \"/culprit resume\" toggle detection, \"/culprit reset\" clears counters, \"/culprit report\" saves a text report you can share.",
             });
 
             foreach (var status in this.sampler.ProbeStatuses)
@@ -129,9 +129,31 @@ public sealed class Plugin : IDalamudPlugin
                 this.sampler.Reset();
                 Services.Log.Info("Culprit counters reset");
                 break;
+            case "report":
+                this.SaveReport();
+                break;
             default:
                 this.OpenMain();
                 break;
+        }
+    }
+
+    private void SaveReport()
+    {
+        if (this.mainWindow is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = this.mainWindow.ReportBuilder.Save();
+            Services.ChatGui.Print($"[Culprit] Report saved to {path}");
+        }
+        catch (Exception e)
+        {
+            Services.Log.Error(e, "Culprit could not save the report");
+            Services.ChatGui.PrintError($"[Culprit] Could not save the report: {e.Message}");
         }
     }
 

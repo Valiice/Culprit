@@ -29,6 +29,8 @@ public class Configuration : IPluginConfiguration
 
     public bool DebugLog { get; set; } = false;
 
+    public bool ShowAllPlugins { get; set; } = false;
+
     public List<string> IgnoredPlugins { get; set; } = [];
 
     public static Configuration Load(IDalamudPluginInterface pluginInterface)

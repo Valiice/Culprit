@@ -17,8 +17,9 @@ This is a private plugin. Build it and load it as a dev plugin:
 - `/culprit` opens the window.
 - `/culprit pause` and `/culprit resume` stop and restart detection.
 - `/culprit reset` clears counters and the incident log.
+- `/culprit report` saves a text report you can share.
 
-The Live tab shows each plugin's latest and longest draw and update times, its 5 second average, and how many errors and incidents it has caused. The Incidents tab lists everything Culprit caught, with a Copy button for bug reports. Settings holds the thresholds, the cooldown, and the ignore list.
+The Live tab shows each plugin's latest and longest draw and update times, its 5 second average, and how many errors and incidents it has caused. It hides quiet plugins by default; tick "Show all plugins" to see every loaded plugin instead of just the offenders. The "Copy report" and "Save report" buttons on the Live tab give you the same plain text report as `/culprit report`, saved to `%AppData%\XIVLauncher\pluginConfigs\Culprit\culprit-report.txt`. The Incidents tab lists everything Culprit caught, with a Copy button for bug reports. Settings holds the thresholds, the cooldown, and the ignore list.
 
 ## What counts as a hiccup
 
