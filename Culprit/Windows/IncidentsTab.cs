@@ -35,7 +35,7 @@ internal sealed class IncidentsTab
         ImGui.SameLine();
         ImGui.TextDisabled($"{rows.Count} of {this.sampler.Store.Count}");
 
-        if (!ImGui.BeginTable("##incidents", 6, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.BordersInnerV))
+        if (!ImGui.BeginTable("##incidents", 7, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.BordersInnerV))
         {
             return;
         }
@@ -46,6 +46,7 @@ internal sealed class IncidentsTab
         ImGui.TableSetupColumn("Rule", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthFixed, 60);
         ImGui.TableSetupColumn("Limit", ImGuiTableColumnFlags.WidthFixed, 50);
+        ImGui.TableSetupColumn("Toast", ImGuiTableColumnFlags.WidthFixed, 45);
         ImGui.TableSetupColumn("Detail", ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableHeadersRow();
 
@@ -71,20 +72,24 @@ internal sealed class IncidentsTab
             ImGui.TextUnformatted(incident.Value.ToString("0.0", CultureInfo.InvariantCulture));
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(incident.Limit.ToString("0", CultureInfo.InvariantCulture));
+
             ImGui.TableNextColumn();
             if (incident.Notified)
             {
-                ImGui.TextUnformatted(incident.Detail);
+                ImGui.TextUnformatted("yes");
             }
             else
             {
-                ImGui.TextDisabled(incident.Detail);
+                ImGui.TextDisabled("no");
             }
 
             if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip(incident.Notified ? "Shown as a toast" : "Logged only (cooldown, mute, or unattributed)");
             }
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(incident.Detail);
         }
 
         ImGui.EndTable();
