@@ -13,6 +13,8 @@ namespace Culprit;
 /// Runs once per framework tick: rebuilds the roster if it went dirty, decides suppression,
 /// reads every available probe, feeds the engine, stores incidents, asks the alert policy, and
 /// shows toasts. Everything here is on the framework thread except LogProbe's enqueue side.
+/// Suppression is blocked while zoning or in a cutscene, for 5 seconds after that clears, and
+/// for 5 seconds after any plugin loads or unloads.
 /// </summary>
 internal sealed class Sampler : IDisposable
 {
@@ -31,7 +33,7 @@ internal sealed class Sampler : IDisposable
     private readonly UpdateStatsProbe updateProbe;
     private readonly LogProbe logProbe;
     private readonly FrameProbe frameProbe = new();
-    private readonly GracePeriod grace = new(TimeSpan.FromSeconds(5));
+    private readonly SuppressionTracker suppression = new(TimeSpan.FromSeconds(5));
     private readonly Notifier notifier;
     private readonly Dictionary<string, (double Draw, double Update)> frameTimings = new(StringComparer.Ordinal);
 
@@ -132,12 +134,12 @@ internal sealed class Sampler : IDisposable
 
         if (this.roster.ConsumeDirty())
         {
-            this.grace.MarkChange(now);
+            this.suppression.MarkPluginChange(now);
             this.roster.Rebuild();
             this.drawProbe.Refresh();
         }
 
-        this.Engine.Suppressed = this.grace.IsActive(now) || SuppressingFlags.Any(f => Services.Condition[f]);
+        this.Engine.Suppressed = this.suppression.Evaluate(SuppressingFlags.Any(f => Services.Condition[f]), now);
 
         this.DrainErrors();
         this.DrainHitches();

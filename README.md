@@ -28,7 +28,7 @@ The Live tab shows each plugin's latest and longest draw and update times, its 5
 - Errors: a plugin logged at least the error count within the error window (default 5 in 60 s).
 - Unattributed: the whole frame was long but no plugin crossed the stall limit. Logged, not shown, unless you enable it.
 
-Culprit stays quiet while zoning, in cutscenes, and for 5 seconds after any plugin loads or unloads.
+Culprit stays quiet while zoning, in cutscenes, and for 5 seconds after any plugin loads or unloads, and for 5 seconds after a zone change finishes.
 
 ## How it works
 
