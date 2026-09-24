@@ -24,6 +24,7 @@ internal sealed class SettingsTab
         this.DrawKofiButton();
 
         var changed = false;
+        var applied = false;
 
         ImGui.TextUnformatted("Detection");
 
@@ -31,6 +32,11 @@ internal sealed class SettingsTab
         if (SliderDouble("Stall (ms in one frame)", ref stallMs, 5, 500, "%.0f"))
         {
             this.config.StallMs = stallMs;
+            applied = true;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             changed = true;
         }
 
@@ -38,6 +44,11 @@ internal sealed class SettingsTab
         if (SliderDouble("Sustained (ms per frame average)", ref sustainedMs, 0.5, 50, "%.1f"))
         {
             this.config.SustainedMs = sustainedMs;
+            applied = true;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             changed = true;
         }
 
@@ -45,6 +56,11 @@ internal sealed class SettingsTab
         if (SliderDouble("Sustained window (s)", ref sustainedWindow, 1, 60, "%.0f"))
         {
             this.config.SustainedWindowSeconds = sustainedWindow;
+            applied = true;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             changed = true;
         }
 
@@ -52,6 +68,11 @@ internal sealed class SettingsTab
         if (SliderInt("Errors before warning", ref errorCount, 1, 100))
         {
             this.config.ErrorCount = errorCount;
+            applied = true;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             changed = true;
         }
 
@@ -59,6 +80,11 @@ internal sealed class SettingsTab
         if (SliderDouble("Error window (s)", ref errorWindow, 5, 600, "%.0f"))
         {
             this.config.ErrorWindowSeconds = errorWindow;
+            applied = true;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             changed = true;
         }
 
@@ -66,6 +92,11 @@ internal sealed class SettingsTab
         if (SliderDouble("Unattributed frame (ms)", ref unattributedMs, 20, 1000, "%.0f"))
         {
             this.config.UnattributedMs = unattributedMs;
+            applied = true;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             changed = true;
         }
 
@@ -76,6 +107,11 @@ internal sealed class SettingsTab
         if (SliderDouble("Cooldown per plugin and rule (min)", ref cooldown, 0.1, 60, "%.1f"))
         {
             this.config.CooldownMinutes = cooldown;
+            applied = true;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             changed = true;
         }
 
@@ -132,6 +168,10 @@ internal sealed class SettingsTab
         if (changed)
         {
             this.config.Save();
+            this.sampler.ApplyConfig();
+        }
+        else if (applied)
+        {
             this.sampler.ApplyConfig();
         }
     }
