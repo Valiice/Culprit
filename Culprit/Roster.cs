@@ -11,7 +11,8 @@ public sealed record PluginInfo(string InternalName, string DisplayName, bool Is
 /// <summary>
 /// The current plugin set from the public API, plus a type-name index built by reflection over
 /// each loaded plugin's assembly so update-handler keys can be mapped back to a plugin.
-/// Rebuilt whenever Dalamud reports the active plugin set changed.
+/// Dalamud can raise ActivePluginsChanged on a thread-pool thread, so the handler only sets a
+/// dirty flag; the sampler rebuilds on the framework thread via Rebuild() and ConsumeDirty().
 /// </summary>
 internal sealed class Roster : IDisposable
 {
@@ -19,6 +20,7 @@ internal sealed class Roster : IDisposable
     private readonly DalamudInternals internals;
     private readonly Dictionary<string, PluginInfo> plugins = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> byDisplayName = new(StringComparer.Ordinal);
+    private volatile bool dirty;
 
     public Roster(IDalamudPluginInterface pluginInterface, DalamudInternals internals)
     {
@@ -27,8 +29,6 @@ internal sealed class Roster : IDisposable
         this.Rebuild();
         pluginInterface.ActivePluginsChanged += this.OnActivePluginsChanged;
     }
-
-    public event Action? Changed;
 
     public IReadOnlyDictionary<string, PluginInfo> Plugins => this.plugins;
 
@@ -43,15 +43,19 @@ internal sealed class Roster : IDisposable
     public string? InternalNameForAssembly(Assembly assembly) =>
         this.pluginInterface.GetPlugin(assembly)?.InternalName;
 
-    public void Dispose() => this.pluginInterface.ActivePluginsChanged -= this.OnActivePluginsChanged;
-
-    private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args)
+    /// <summary>Returns whether the plugin set changed since the last call, clearing the flag.</summary>
+    public bool ConsumeDirty()
     {
-        this.Rebuild();
-        this.Changed?.Invoke();
+        var wasDirty = this.dirty;
+        this.dirty = false;
+        return wasDirty;
     }
 
-    private void Rebuild()
+    public void Dispose() => this.pluginInterface.ActivePluginsChanged -= this.OnActivePluginsChanged;
+
+    private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args) => this.dirty = true;
+
+    public void Rebuild()
     {
         this.plugins.Clear();
         this.byDisplayName.Clear();

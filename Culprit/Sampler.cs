@@ -10,9 +10,9 @@ using Dalamud.Plugin.Services;
 namespace Culprit;
 
 /// <summary>
-/// Runs once per framework tick: decides suppression, reads every available probe, feeds the
-/// engine, stores incidents, asks the alert policy, and shows toasts. Everything here is on the
-/// framework thread except LogProbe's enqueue side.
+/// Runs once per framework tick: rebuilds the roster if it went dirty, decides suppression,
+/// reads every available probe, feeds the engine, stores incidents, asks the alert policy, and
+/// shows toasts. Everything here is on the framework thread except LogProbe's enqueue side.
 /// </summary>
 internal sealed class Sampler : IDisposable
 {
@@ -49,7 +49,6 @@ internal sealed class Sampler : IDisposable
         this.ApplyConfig();
 
         this.drawProbe.Refresh();
-        roster.Changed += this.OnRosterChanged;
         Services.Framework.Update += this.OnUpdate;
     }
 
@@ -92,7 +91,6 @@ internal sealed class Sampler : IDisposable
     public void Dispose()
     {
         Services.Framework.Update -= this.OnUpdate;
-        this.roster.Changed -= this.OnRosterChanged;
     }
 
     private static bool UiHidden() =>
@@ -101,12 +99,6 @@ internal sealed class Sampler : IDisposable
         || Services.Condition[ConditionFlag.OccupiedInCutSceneEvent]
         || Services.Condition[ConditionFlag.WatchingCutscene]
         || Services.Condition[ConditionFlag.WatchingCutscene78];
-
-    private void OnRosterChanged()
-    {
-        this.grace.MarkChange(DateTime.UtcNow);
-        this.drawProbe.Refresh();
-    }
 
     private void OnUpdate(IFramework framework)
     {
@@ -124,6 +116,13 @@ internal sealed class Sampler : IDisposable
     {
         var now = DateTime.UtcNow;
         var frameMs = this.frameProbe.Tick();
+
+        if (this.roster.ConsumeDirty())
+        {
+            this.grace.MarkChange(now);
+            this.roster.Rebuild();
+            this.drawProbe.Refresh();
+        }
 
         this.Engine.Suppressed = this.grace.IsActive(now) || SuppressingFlags.Any(f => Services.Condition[f]);
 
@@ -168,7 +167,7 @@ internal sealed class Sampler : IDisposable
         while (this.logProbe.TryDequeueError(out var raw))
         {
             var name = raw.PluginName ?? raw.Frames.Select(this.roster.InternalNameForAssembly).FirstOrDefault(n => n is not null);
-            if (name is null || this.Engine.IsIgnored(name))
+            if (name is null || this.Engine.IsIgnored(name) || this.Engine.Paused)
             {
                 continue;
             }
