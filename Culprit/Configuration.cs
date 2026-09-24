@@ -33,8 +33,27 @@ public class Configuration : IPluginConfiguration
 
     public static Configuration Load(IDalamudPluginInterface pluginInterface)
     {
-        var config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        Configuration config;
+        try
+        {
+            config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        }
+        catch (Exception e)
+        {
+            Services.Log.Warning(e, "Culprit configuration could not be read, using defaults");
+            config = new Configuration();
+        }
+
         config.IgnoredPlugins ??= [];
+
+        config.StallMs = Math.Clamp(config.StallMs, 5, 500);
+        config.SustainedMs = Math.Clamp(config.SustainedMs, 0.5, 50);
+        config.SustainedWindowSeconds = Math.Clamp(config.SustainedWindowSeconds, 1, 60);
+        config.ErrorCount = Math.Clamp(config.ErrorCount, 1, 100);
+        config.ErrorWindowSeconds = Math.Clamp(config.ErrorWindowSeconds, 5, 600);
+        config.UnattributedMs = Math.Clamp(config.UnattributedMs, 20, 1000);
+        config.CooldownMinutes = Math.Clamp(config.CooldownMinutes, 0.1, 60);
+
         return config;
     }
 
