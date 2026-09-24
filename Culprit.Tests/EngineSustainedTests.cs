@@ -99,4 +99,29 @@ public class EngineSustainedTests
 
         Assert.Single(incidents, i => i.Rule == IncidentRule.Sustained);
     }
+
+    [Fact]
+    public void WindowSpanningAGap_IsAbandonedNotReported()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+
+        var before = Run(engine, "Gappy", 4, 0, 1, T0);
+        // No samples fed for 12 seconds: suppression or pause without calling Process.
+        var after = Run(engine, "Gappy", 4, 0, 0, T0.AddSeconds(13));
+
+        var all = before.Concat(after);
+        Assert.DoesNotContain(all, i => i.Rule == IncidentRule.Sustained);
+    }
+
+    [Fact]
+    public void WindowResumesAfterGap()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+
+        var before = Run(engine, "Gappy", 4, 0, 1, T0);
+        var after = Run(engine, "Gappy", 4, 0, 5.1, T0.AddSeconds(13));
+
+        var all = before.Concat(after);
+        Assert.Single(all, i => i.Rule == IncidentRule.Sustained);
+    }
 }

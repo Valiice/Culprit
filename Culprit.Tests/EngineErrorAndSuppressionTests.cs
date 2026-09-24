@@ -47,7 +47,7 @@ public class EngineErrorAndSuppressionTests
     }
 
     [Fact]
-    public void AfterAnErrorsIncident_TheCountRestarts()
+    public void AfterAnErrorsIncident_NoSecondIncidentWithinTheWindow()
     {
         var engine = new Engine(new Thresholds(), "Culprit");
         for (var i = 0; i < 5; i++)
@@ -56,6 +56,27 @@ public class EngineErrorAndSuppressionTests
         }
 
         Assert.Null(engine.Process(Err("Thrower", 5)));
+    }
+
+    [Fact]
+    public void AfterTheErrorWindow_ErrorsIncidentFiresAgain()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.Equal(i == 4, engine.Process(Err("Thrower", i)) is not null);
+        }
+
+        var fired = 0;
+        for (var i = 61; i <= 65; i++)
+        {
+            if (engine.Process(Err("Thrower", i)) is not null)
+            {
+                fired++;
+            }
+        }
+
+        Assert.Equal(1, fired);
     }
 
     [Fact]
@@ -114,6 +135,10 @@ public class EngineErrorAndSuppressionTests
         Assert.Empty(engine.Process(new FrameSample(T0, 500, [new PluginTiming("P", 400, 0)])));
         Assert.Null(engine.Process(Err("P")));
         Assert.Null(engine.Process(new HitchEvent(T0, "P", 500, 100, "Draw")));
+
+        var snapshot = engine.Snapshot("P");
+        Assert.NotNull(snapshot);
+        Assert.Equal(400, snapshot.LastDrawMs);
     }
 
     [Fact]

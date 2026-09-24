@@ -8,6 +8,7 @@ public sealed class PluginWindow
 {
     private readonly List<double> samples = [];
     private readonly Queue<DateTime> errors = new();
+    private readonly Dictionary<string, DateTime> lastStallAt = new(StringComparer.Ordinal);
     private DateTime? windowStart;
     private double lastCompletedAverage;
 
@@ -18,6 +19,9 @@ public sealed class PluginWindow
     public double LongestDrawMs { get; private set; }
 
     public double LongestUpdateMs { get; private set; }
+
+    /// <summary>When the last Errors incident was emitted for this plugin, so the engine can rate-limit them.</summary>
+    public DateTime? LastErrorsIncidentAt { get; set; }
 
     /// <summary>Mean of the current window, or of the last completed one while the current is empty.</summary>
     public double CurrentAverageMs => this.samples.Count == 0 ? this.lastCompletedAverage : this.samples.Average();
@@ -34,16 +38,31 @@ public sealed class PluginWindow
 
     /// <summary>
     /// Returns the window mean and starts a new window once windowSeconds have elapsed since the
-    /// window began; otherwise null. An empty due window restarts without reporting.
+    /// window began; otherwise null. An empty due window restarts without reporting. A window that
+    /// spans a gap more than twice as long as windowSeconds (suppression or pause) is abandoned
+    /// instead of completed: its stale pre-gap samples are discarded and lastCompletedAverage is
+    /// left untouched, so a resumed window is judged only on fresh samples.
     /// </summary>
     public double? CompleteWindowIfDue(DateTime now, double windowSeconds)
     {
-        if (this.windowStart is not { } start || (now - start).TotalSeconds < windowSeconds)
+        if (this.windowStart is not { } start)
+        {
+            return null;
+        }
+
+        var elapsed = (now - start).TotalSeconds;
+        if (elapsed < windowSeconds)
         {
             return null;
         }
 
         this.windowStart = now;
+        if (elapsed > 2 * windowSeconds)
+        {
+            this.samples.Clear();
+            return null;
+        }
+
         if (this.samples.Count == 0)
         {
             return null;
@@ -68,4 +87,20 @@ public sealed class PluginWindow
     }
 
     public void ClearErrors() => this.errors.Clear();
+
+    /// <summary>
+    /// Coalesces repeated stalls from the same source (Draw or Update) so a chronic offender
+    /// cannot flood the incident log: returns true and records now at most once per second per
+    /// source, false otherwise.
+    /// </summary>
+    public bool ShouldEmitStall(string source, DateTime now)
+    {
+        if (this.lastStallAt.TryGetValue(source, out var last) && (now - last).TotalSeconds < 1)
+        {
+            return false;
+        }
+
+        this.lastStallAt[source] = now;
+        return true;
+    }
 }

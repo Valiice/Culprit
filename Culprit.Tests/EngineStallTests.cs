@@ -127,4 +127,36 @@ public class EngineStallTests
 
         Assert.Empty(engine.Process(Frame(10, new PluginTiming("P", 30, 0))));
     }
+
+    [Fact]
+    public void RepeatedStall_IsCoalescedWithinOneSecond()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+
+        var incidents = new List<Incident>();
+        for (var i = 0; i < 3; i++)
+        {
+            var ts = T0.AddMilliseconds(i * 16);
+            incidents.AddRange(engine.Process(new FrameSample(ts, 30, [new PluginTiming("Heavy", 30, 0)])));
+        }
+
+        Assert.Single(incidents, i => i.Rule == IncidentRule.Stall);
+    }
+
+    [Fact]
+    public void StallAfterOneSecond_FiresAgain()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+
+        var incidents = new List<Incident>();
+        for (var i = 0; i < 3; i++)
+        {
+            var ts = T0.AddMilliseconds(i * 16);
+            incidents.AddRange(engine.Process(new FrameSample(ts, 30, [new PluginTiming("Heavy", 30, 0)])));
+        }
+
+        incidents.AddRange(engine.Process(new FrameSample(T0.AddSeconds(1.1), 30, [new PluginTiming("Heavy", 30, 0)])));
+
+        Assert.Equal(2, incidents.Count(i => i.Rule == IncidentRule.Stall));
+    }
 }

@@ -57,13 +57,20 @@ public class AttributionTests
     }
 
     [Fact]
-    public void TypeIndex_LaterAddWins()
+    public void TypeIndex_ConflictingAdd_IsAmbiguous()
     {
         var index = new TypeIndex();
         index.Add("Shared.Type", "First");
         index.Add("Shared.Type", "Second");
 
-        Assert.Equal("Second", index.ResolveType("Shared.Type"));
+        Assert.Null(index.ResolveType("Shared.Type"));
+        Assert.Null(index.ResolveHandlerKey("Shared.Type::OnUpdate"));
+
+        var same = new TypeIndex();
+        same.Add("PlatePeek.Plugin", "PlatePeek");
+        same.Add("PlatePeek.Plugin", "PlatePeek");
+
+        Assert.Equal("PlatePeek", same.ResolveType("PlatePeek.Plugin"));
     }
 
     [Theory]

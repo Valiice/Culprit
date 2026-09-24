@@ -34,9 +34,13 @@ public sealed class Engine
         string.Equals(internalName, this.selfInternalName, StringComparison.OrdinalIgnoreCase)
         || this.Ignored.Contains(internalName);
 
+    /// <summary>
+    /// While Suppressed, nothing is recorded or emitted. While Paused, sampling still runs (so the
+    /// Live tab keeps updating) but no incidents are emitted.
+    /// </summary>
     public IReadOnlyList<Incident> Process(FrameSample sample)
     {
-        if (this.Paused || this.Suppressed)
+        if (this.Suppressed)
         {
             return [];
         }
@@ -54,23 +58,40 @@ public sealed class Engine
 
             var window = this.Window(timing.InternalName);
             window.AddTiming(sample.Timestamp, timing.DrawMs, timing.UpdateMs);
+            var due = window.CompleteWindowIfDue(sample.Timestamp, t.SustainedWindowSeconds);
+
+            if (this.Paused)
+            {
+                continue;
+            }
 
             if (timing.DrawMs > t.StallMs)
             {
                 anyStall = true;
-                incidents.Add(new Incident(sample.Timestamp, timing.InternalName, IncidentRule.Stall, timing.DrawMs, t.StallMs, "Draw"));
+                if (window.ShouldEmitStall("Draw", sample.Timestamp))
+                {
+                    incidents.Add(new Incident(sample.Timestamp, timing.InternalName, IncidentRule.Stall, timing.DrawMs, t.StallMs, "Draw"));
+                }
             }
 
             if (timing.UpdateMs > t.StallMs)
             {
                 anyStall = true;
-                incidents.Add(new Incident(sample.Timestamp, timing.InternalName, IncidentRule.Stall, timing.UpdateMs, t.StallMs, "Update"));
+                if (window.ShouldEmitStall("Update", sample.Timestamp))
+                {
+                    incidents.Add(new Incident(sample.Timestamp, timing.InternalName, IncidentRule.Stall, timing.UpdateMs, t.StallMs, "Update"));
+                }
             }
 
-            if (window.CompleteWindowIfDue(sample.Timestamp, t.SustainedWindowSeconds) is { } average && average > t.SustainedMs)
+            if (due is { } average && average > t.SustainedMs)
             {
                 incidents.Add(new Incident(sample.Timestamp, timing.InternalName, IncidentRule.Sustained, average, t.SustainedMs, $"{t.SustainedWindowSeconds:0} s window"));
             }
+        }
+
+        if (this.Paused)
+        {
+            return [];
         }
 
         if (!anyStall && sample.FrameMs > t.UnattributedMs)
@@ -96,7 +117,12 @@ public sealed class Engine
             return null;
         }
 
-        window.ClearErrors();
+        if (window.LastErrorsIncidentAt is { } last && (error.Timestamp - last).TotalSeconds < t.ErrorWindowSeconds)
+        {
+            return null;
+        }
+
+        window.LastErrorsIncidentAt = error.Timestamp;
         return new Incident(error.Timestamp, error.InternalName, IncidentRule.Errors, count, t.ErrorCount, error.Message);
     }
 
