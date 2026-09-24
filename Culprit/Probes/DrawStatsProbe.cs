@@ -9,7 +9,9 @@ public sealed record DrawReading(string InternalName, double LastMs, double Long
 /// <summary>
 /// Reads each loaded plugin's PluginDrawStatistics (Dalamud internal). Turns on the global
 /// UiBuilder.DoStats switch, which is off in release builds, and restores it on dispose.
-/// Refresh() rebuilds the per-plugin cache; call it whenever the plugin set changes.
+/// Refresh() rebuilds the per-plugin cache; call it whenever the plugin set changes. Readings
+/// are emitted only for frames the plugin actually drew, tracked via UiBuilder.FrameCount, so a
+/// hidden UI, cutscene, gpose, or draw-time-tracking being off does not replay a stale reading.
 /// </summary>
 internal sealed class DrawStatsProbe : IDisposable
 {
@@ -18,7 +20,9 @@ internal sealed class DrawStatsProbe : IDisposable
 
     private readonly Members? members;
     private readonly bool previousDoStats;
-    private readonly List<(string InternalName, object Stats)> cached = [];
+    private readonly bool switchedOn;
+    private readonly List<(string InternalName, object Stats, Dalamud.Interface.UiBuilder UiBuilder)> cached = [];
+    private readonly Dictionary<string, ulong> lastFrameCounts = new(StringComparer.Ordinal);
     private int failures;
 
     public DrawStatsProbe(DalamudInternals internals)
@@ -45,6 +49,7 @@ internal sealed class DrawStatsProbe : IDisposable
 
             this.previousDoStats = (bool)(this.members.DoStats.GetValue(null) ?? false);
             this.members.DoStats.SetValue(null, true);
+            this.switchedOn = true;
             this.Status = ProbeStatus.Ok(Name);
         }
         catch (Exception e)
@@ -59,6 +64,7 @@ internal sealed class DrawStatsProbe : IDisposable
     public void Refresh()
     {
         this.cached.Clear();
+        this.lastFrameCounts.Clear();
         if (this.members is not { } m || !this.Status.Available)
         {
             return;
@@ -77,12 +83,14 @@ internal sealed class DrawStatsProbe : IDisposable
                 var dalamudInterface = m.DalamudInterface.GetValue(plugin);
                 var uiBuilder = dalamudInterface is null ? null : m.LocalUiBuilder.GetValue(dalamudInterface);
                 var stats = uiBuilder is null ? null : m.PluginDrawStatistics.GetValue(uiBuilder);
-                if (stats is null || m.InternalName.GetValue(plugin) is not string internalName)
+                if (stats is null
+                    || uiBuilder is not Dalamud.Interface.UiBuilder typedUiBuilder
+                    || m.InternalName.GetValue(plugin) is not string internalName)
                 {
                     continue;
                 }
 
-                this.cached.Add((internalName, stats));
+                this.cached.Add((internalName, stats, typedUiBuilder));
             }
         }
         catch (Exception e)
@@ -91,7 +99,10 @@ internal sealed class DrawStatsProbe : IDisposable
         }
     }
 
-    /// <summary>Last and longest draw time per loaded plugin, in ms. Plugins that never drew are skipped.</summary>
+    /// <summary>
+    /// Last and longest draw time per loaded plugin, in ms. Plugins that never drew, or whose
+    /// UiBuilder.FrameCount has not advanced since the previous call, are skipped.
+    /// </summary>
     public IReadOnlyList<DrawReading> Read()
     {
         if (this.members is not { } m || !this.Status.Available)
@@ -102,8 +113,16 @@ internal sealed class DrawStatsProbe : IDisposable
         var result = new List<DrawReading>(this.cached.Count);
         try
         {
-            foreach (var (internalName, stats) in this.cached)
+            foreach (var (internalName, stats, uiBuilder) in this.cached)
             {
+                var frameCount = uiBuilder.FrameCount;
+                var hasLastFrameCount = this.lastFrameCounts.TryGetValue(internalName, out var lastFrameCount);
+                this.lastFrameCounts[internalName] = frameCount;
+                if (hasLastFrameCount && frameCount == lastFrameCount)
+                {
+                    continue;
+                }
+
                 var last = (long)(m.LastDrawTime.GetValue(stats) ?? -1L);
                 if (last < 0)
                 {
@@ -126,6 +145,11 @@ internal sealed class DrawStatsProbe : IDisposable
 
     public void Dispose()
     {
+        if (!this.switchedOn)
+        {
+            return;
+        }
+
         try
         {
             this.members?.DoStats.SetValue(null, this.previousDoStats);

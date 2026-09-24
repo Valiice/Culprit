@@ -18,6 +18,7 @@ internal sealed class UpdateStatsProbe : IDisposable
     private readonly PropertyInfo? statsEnabled;
     private readonly Dictionary<string, List<double>>? history;
     private readonly bool previousEnabled;
+    private readonly bool switchedOn;
     private readonly FreshnessTracker tracker = new();
     private int failures;
 
@@ -31,6 +32,7 @@ internal sealed class UpdateStatsProbe : IDisposable
                            ?? throw new InvalidCastException("Framework.StatsHistory is not Dictionary<string, List<double>>");
             this.previousEnabled = (bool)(this.statsEnabled.GetValue(null) ?? false);
             this.statsEnabled.SetValue(null, true);
+            this.switchedOn = true;
             this.Status = ProbeStatus.Ok(Name);
         }
         catch (Exception e)
@@ -90,6 +92,11 @@ internal sealed class UpdateStatsProbe : IDisposable
 
     public void Dispose()
     {
+        if (!this.switchedOn)
+        {
+            return;
+        }
+
         try
         {
             this.statsEnabled?.SetValue(null, this.previousEnabled);
