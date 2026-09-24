@@ -64,6 +64,22 @@ public class StatsReportTests
     }
 
     [Fact]
+    public void Format_CleansNewlinesAndPipesInFreeText()
+    {
+        var incidents = new List<ReportIncident>
+        {
+            new(T0, "Peeping Tom", "Stall", 48.0, 20, "line one\nline two | more", true),
+        };
+
+        var text = StatsReport.Format(Context(incidents: incidents));
+
+        var lines = text.Split('\n');
+        var incidentRowLines = lines.Count(l => l.Contains("Peeping Tom | Stall"));
+        Assert.Equal(1, incidentRowLines);
+        Assert.Contains(lines, l => l.Contains("line one line two / more"));
+    }
+
+    [Fact]
     public void Incidents_BeyondFiftyAreCutAndHeaderReportsShownOfTotal()
     {
         var incidents = new List<ReportIncident>();

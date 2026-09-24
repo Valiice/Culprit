@@ -57,7 +57,16 @@ internal sealed class LiveTab
         ImGui.SameLine();
         if (ImGui.SmallButton("Copy report"))
         {
-            ImGui.SetClipboardText(this.reportBuilder.Build());
+            try
+            {
+                ImGui.SetClipboardText(this.reportBuilder.Build());
+            }
+            catch (Exception e)
+            {
+                Services.Log.Error(e, "Culprit could not build the report");
+                this.saveError = e.Message;
+                this.savedAt = DateTime.UtcNow;
+            }
         }
 
         ImGui.SameLine();

@@ -37,11 +37,12 @@ public static class StatsReport
 
         foreach (var probe in context.Probes)
         {
+            var name = Clean(probe.Name);
             lines.Add(probe.Available
-                ? $"  {probe.Name}: available"
+                ? $"  {name}: available"
                 : probe.Reason is { } reason
-                    ? $"  {probe.Name}: unavailable, {reason}"
-                    : $"  {probe.Name}: unavailable");
+                    ? $"  {name}: unavailable, {Clean(reason)}"
+                    : $"  {name}: unavailable");
         }
 
         var t = context.Thresholds;
@@ -59,7 +60,7 @@ public static class StatsReport
         foreach (var p in context.Plugins)
         {
             lines.Add(
-                $"  {p.DisplayName} | {p.InternalName} | {p.LastDrawMs.ToString("0.0", ci)} | {p.LongestDrawMs.ToString("0.0", ci)} | "
+                $"  {Clean(p.DisplayName)} | {Clean(p.InternalName)} | {p.LastDrawMs.ToString("0.0", ci)} | {p.LongestDrawMs.ToString("0.0", ci)} | "
                 + $"{p.LastUpdateMs.ToString("0.0", ci)} | {p.LongestUpdateMs.ToString("0.0", ci)} | {p.AverageMs.ToString("0.0", ci)} | "
                 + $"{p.Errors.ToString(ci)} | {p.Incidents.ToString(ci)} | {(p.Ignored ? "yes" : "no")}");
         }
@@ -78,12 +79,23 @@ public static class StatsReport
             foreach (var incident in context.Incidents.Take(MaxIncidents))
             {
                 lines.Add(
-                    $"  {incident.Timestamp.ToLocalTime().ToString("HH:mm:ss", ci)} | {incident.PluginDisplayName} | {incident.Rule} | "
-                    + $"{incident.Value.ToString("0.0", ci)} | {incident.Limit.ToString("0", ci)} | {incident.Detail} | "
+                    $"  {incident.Timestamp.ToLocalTime().ToString("HH:mm:ss", ci)} | {Clean(incident.PluginDisplayName)} | {Clean(incident.Rule)} | "
+                    + $"{incident.Value.ToString("0.0", ci)} | {incident.Limit.ToString("0", ci)} | {Clean(incident.Detail)} | "
                     + $"{(incident.Notified ? "yes" : "no")}");
             }
         }
 
         return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Keeps free text from breaking the pipe-delimited row structure: newlines become spaces,
+    /// runs of whitespace collapse to one space, pipes become slashes, and the result is trimmed.
+    /// </summary>
+    private static string Clean(string value)
+    {
+        var withoutBreaksOrPipes = value.Replace('\r', ' ').Replace('\n', ' ').Replace('|', '/');
+        var parts = withoutBreaksOrPipes.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', parts);
     }
 }
