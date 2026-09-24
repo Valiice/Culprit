@@ -61,6 +61,9 @@ internal sealed class DrawStatsProbe : IDisposable
 
     public ProbeStatus Status { get; private set; }
 
+    /// <summary>Whether UiBuilder.DoStats is currently true. False when the user unticked draw time tracking in /xlstats.</summary>
+    public bool TrackingEnabled { get; private set; } = true;
+
     public void Refresh()
     {
         this.cached.Clear();
@@ -106,6 +109,12 @@ internal sealed class DrawStatsProbe : IDisposable
     public IReadOnlyList<DrawReading> Read()
     {
         if (this.members is not { } m || !this.Status.Available)
+        {
+            return [];
+        }
+
+        this.TrackingEnabled = m.DoStats.GetValue(null) is true;
+        if (!this.TrackingEnabled)
         {
             return [];
         }

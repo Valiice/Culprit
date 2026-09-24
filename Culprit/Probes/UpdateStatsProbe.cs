@@ -43,10 +43,19 @@ internal sealed class UpdateStatsProbe : IDisposable
 
     public ProbeStatus Status { get; private set; }
 
+    /// <summary>Whether Framework.StatsEnabled is currently true. False when the user unticked update time tracking in /xlstats.</summary>
+    public bool TrackingEnabled { get; private set; } = true;
+
     /// <summary>New samples since the last call, one per handler key that was invoked since then.</summary>
     public IReadOnlyList<UpdateReading> Read()
     {
-        if (this.history is not { } history || !this.Status.Available)
+        if (this.history is not { } history || this.statsEnabled is not { } statsEnabled || !this.Status.Available)
+        {
+            return [];
+        }
+
+        this.TrackingEnabled = statsEnabled.GetValue(null) is true;
+        if (!this.TrackingEnabled)
         {
             return [];
         }
