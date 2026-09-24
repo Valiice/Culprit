@@ -81,6 +81,37 @@ public sealed class Engine
         return incidents;
     }
 
+    public Incident? Process(ErrorEvent error)
+    {
+        if (this.Paused || this.Suppressed || error.InternalName is null || this.IsIgnored(error.InternalName))
+        {
+            return null;
+        }
+
+        var t = this.Thresholds;
+        var window = this.Window(error.InternalName);
+        var count = window.AddError(error.Timestamp, t.ErrorWindowSeconds);
+        if (count < t.ErrorCount)
+        {
+            return null;
+        }
+
+        window.ClearErrors();
+        return new Incident(error.Timestamp, error.InternalName, IncidentRule.Errors, count, t.ErrorCount, error.Message);
+    }
+
+    public Incident? Process(HitchEvent hitch)
+    {
+        if (this.Paused || this.Suppressed || (hitch.InternalName is { } name && this.IsIgnored(name)))
+        {
+            return null;
+        }
+
+        return hitch.InternalName is null
+            ? new Incident(hitch.Timestamp, null, IncidentRule.UnattributedStall, hitch.Ms, hitch.LimitMs, hitch.Source)
+            : new Incident(hitch.Timestamp, hitch.InternalName, IncidentRule.Stall, hitch.Ms, hitch.LimitMs, hitch.Source);
+    }
+
     public PluginWindow? Snapshot(string internalName) =>
         this.windows.GetValueOrDefault(internalName);
 
