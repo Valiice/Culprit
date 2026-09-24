@@ -67,6 +67,11 @@ internal sealed class LiveTab
         {
             ImGui.TextColored(Colors.Warn, "Reduced mode: some signals are missing. Dalamud's internals may have changed; report the red line above.");
         }
+
+        foreach (var warning in this.sampler.TrackingWarnings)
+        {
+            ImGui.TextColored(Colors.Warn, warning);
+        }
     }
 
     private void DrawTable()

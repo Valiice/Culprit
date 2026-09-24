@@ -59,9 +59,29 @@ internal sealed class Sampler : IDisposable
     public AlertPolicy Policy { get; }
 
     public IReadOnlyList<ProbeStatus> ProbeStatuses =>
-        [this.frameProbe.Status, this.drawProbe.Status, this.updateProbe.Status, this.logProbe.Status];
+        [this.frameProbe.Status, this.drawProbe.Status, this.updateProbe.Status, this.logProbe.Status, this.roster.AttributionStatus];
 
     public bool ReducedMode => this.ProbeStatuses.Any(s => !s.Available);
+
+    /// <summary>Short warnings for probes whose Dalamud-side tracking switch is currently off.</summary>
+    public IReadOnlyList<string> TrackingWarnings
+    {
+        get
+        {
+            var warnings = new List<string>();
+            if (!this.drawProbe.TrackingEnabled)
+            {
+                warnings.Add("Draw time tracking is off in /xlstats");
+            }
+
+            if (!this.updateProbe.TrackingEnabled)
+            {
+                warnings.Add("Framework update tracking is off in /xlstats");
+            }
+
+            return warnings;
+        }
+    }
 
     public bool Paused
     {
@@ -92,13 +112,6 @@ internal sealed class Sampler : IDisposable
     {
         Services.Framework.Update -= this.OnUpdate;
     }
-
-    private static bool UiHidden() =>
-        Services.GameGui.GameUiHidden
-        || Services.ClientState.IsGPosing
-        || Services.Condition[ConditionFlag.OccupiedInCutSceneEvent]
-        || Services.Condition[ConditionFlag.WatchingCutscene]
-        || Services.Condition[ConditionFlag.WatchingCutscene78];
 
     private void OnUpdate(IFramework framework)
     {
@@ -136,12 +149,9 @@ internal sealed class Sampler : IDisposable
 
         this.frameTimings.Clear();
 
-        if (!UiHidden())
+        foreach (var reading in this.drawProbe.Read())
         {
-            foreach (var reading in this.drawProbe.Read())
-            {
-                this.frameTimings[reading.InternalName] = (reading.LastMs, 0);
-            }
+            this.frameTimings[reading.InternalName] = (reading.LastMs, 0);
         }
 
         foreach (var reading in this.updateProbe.Read())

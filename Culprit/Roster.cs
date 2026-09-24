@@ -34,6 +34,8 @@ internal sealed class Roster : IDisposable
 
     public TypeIndex TypeIndex { get; } = new();
 
+    public ProbeStatus AttributionStatus { get; private set; } = ProbeStatus.Ok("Attribution");
+
     public string? DisplayName(string internalName) =>
         this.plugins.TryGetValue(internalName, out var info) ? info.DisplayName : null;
 
@@ -100,12 +102,22 @@ internal sealed class Roster : IDisposable
                     {
                         this.TypeIndex.Add(fullName, name);
                     }
+
+                    // Generic instantiations render differently in Dalamud's handler keys than in FullName.
+                    var typeString = type.ToString();
+                    if (typeString != type.FullName)
+                    {
+                        this.TypeIndex.Add(typeString, name);
+                    }
                 }
             }
+
+            this.AttributionStatus = ProbeStatus.Ok("Attribution");
         }
         catch (Exception e)
         {
             Services.Log.Warning(e, "Culprit could not build the type index; update handlers will be unattributed");
+            this.AttributionStatus = ProbeStatus.Failed("Attribution", e);
         }
     }
 
