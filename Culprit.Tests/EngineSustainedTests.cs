@@ -124,4 +124,36 @@ public class EngineSustainedTests
         var all = before.Concat(after);
         Assert.Single(all, i => i.Rule == IncidentRule.Sustained);
     }
+
+    [Fact]
+    public void HugeStallFrame_DoesNotEchoAsSustained()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+        var initial = engine.Process(new FrameSample(T0, 16, [new PluginTiming("Heavy", 600, 0)]));
+
+        var incidents = initial.Concat(Run(engine, "Heavy", 0.1, 0, 5.2, T0.AddMilliseconds(17))).ToList();
+
+        Assert.DoesNotContain(incidents, i => i.Rule == IncidentRule.Sustained);
+        Assert.Single(incidents, i => i.Rule == IncidentRule.Stall);
+    }
+
+    [Fact]
+    public void StallFrame_StillUpdatesLastAndLongest()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+        engine.Process(new FrameSample(T0, 16, [new PluginTiming("Heavy", 600, 0)]));
+
+        Assert.Equal(600, engine.Snapshot("Heavy")!.LongestDrawMs);
+        Assert.Equal(600, engine.Snapshot("Heavy")!.LastDrawMs);
+    }
+
+    [Fact]
+    public void SteadyDrainBelowStall_StillCountsTowardSustained()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+
+        var incidents = Run(engine, "Drain", 15, 0, 5.1, T0);
+
+        Assert.Single(incidents, i => i.Rule == IncidentRule.Sustained);
+    }
 }

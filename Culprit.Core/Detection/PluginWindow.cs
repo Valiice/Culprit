@@ -26,14 +26,23 @@ public sealed class PluginWindow
     /// <summary>Mean of the current window, or of the last completed one while the current is empty.</summary>
     public double CurrentAverageMs => this.samples.Count == 0 ? this.lastCompletedAverage : this.samples.Average();
 
-    public void AddTiming(DateTime now, double drawMs, double updateMs)
+    /// <summary>
+    /// Records a frame's timings. Last and Longest always update. The sample is folded into the
+    /// sustained window (and the window started if it was not already) only when includeInAverage
+    /// is true, so a frame that already got reported as a stall does not also echo into Sustained.
+    /// </summary>
+    public void AddTiming(DateTime now, double drawMs, double updateMs, bool includeInAverage)
     {
         this.LastDrawMs = drawMs;
         this.LastUpdateMs = updateMs;
         this.LongestDrawMs = Math.Max(this.LongestDrawMs, drawMs);
         this.LongestUpdateMs = Math.Max(this.LongestUpdateMs, updateMs);
-        this.windowStart ??= now;
-        this.samples.Add(drawMs + updateMs);
+
+        if (includeInAverage)
+        {
+            this.windowStart ??= now;
+            this.samples.Add(drawMs + updateMs);
+        }
     }
 
     /// <summary>

@@ -5,6 +5,8 @@ namespace Culprit.Core.Detection;
 /// <summary>
 /// Turns frame samples and error events into incidents. Pure: no clock, no I/O. The caller
 /// sets Suppressed (zoning, cutscene, grace period) and Paused (user command) before feeding it.
+/// Frames that crossed the stall limit are reported as stalls and left out of the sustained
+/// average, so one huge frame cannot echo as a Sustained incident.
 /// </summary>
 public sealed class Engine
 {
@@ -57,7 +59,8 @@ public sealed class Engine
             }
 
             var window = this.Window(timing.InternalName);
-            window.AddTiming(sample.Timestamp, timing.DrawMs, timing.UpdateMs);
+            var isStall = timing.DrawMs > t.StallMs || timing.UpdateMs > t.StallMs;
+            window.AddTiming(sample.Timestamp, timing.DrawMs, timing.UpdateMs, includeInAverage: !isStall);
             var due = window.CompleteWindowIfDue(sample.Timestamp, t.SustainedWindowSeconds);
 
             if (this.Paused)
