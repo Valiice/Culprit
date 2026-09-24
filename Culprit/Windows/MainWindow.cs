@@ -6,12 +6,16 @@ namespace Culprit.Windows;
 
 internal sealed class MainWindow : Window
 {
-    private readonly Sampler sampler;
+    private readonly LiveTab liveTab;
+    private readonly IncidentsTab incidentsTab;
+    private readonly SettingsTab settingsTab;
 
     public MainWindow(Configuration config, Sampler sampler, Roster roster)
         : base("Culprit###CulpritMain")
     {
-        this.sampler = sampler;
+        this.liveTab = new LiveTab(config, sampler, roster);
+        this.incidentsTab = new IncidentsTab(sampler, roster);
+        this.settingsTab = new SettingsTab(config, sampler, roster);
         this.SizeConstraints = new WindowSizeConstraints
         {
             MinimumSize = new Vector2(640, 400),
@@ -20,9 +24,29 @@ internal sealed class MainWindow : Window
 
     public override void Draw()
     {
-        foreach (var status in this.sampler.ProbeStatuses)
+        if (!ImGui.BeginTabBar("##culpritTabs"))
         {
-            ImGui.TextUnformatted($"{status.Name}: {(status.Available ? "ok" : status.Reason)}");
+            return;
         }
+
+        if (ImGui.BeginTabItem("Live"))
+        {
+            this.liveTab.Draw();
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Incidents"))
+        {
+            this.incidentsTab.Draw();
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Settings"))
+        {
+            this.settingsTab.Draw();
+            ImGui.EndTabItem();
+        }
+
+        ImGui.EndTabBar();
     }
 }
