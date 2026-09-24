@@ -1,0 +1,132 @@
+using Culprit.Core.Alerting;
+using Culprit.Core.Models;
+using Xunit;
+
+namespace Culprit.Tests;
+
+public class AlertPolicyTests
+{
+    private static readonly DateTime T0 = new(2026, 9, 24, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly AlertSettings Defaults = new(TimeSpan.FromMinutes(5), Muted: false, NotifyUnattributed: false);
+
+    private static Incident Stall(string? plugin, int secondsAfter = 0) =>
+        new(T0.AddSeconds(secondsAfter), plugin, IncidentRule.Stall, 48, 20, "Draw");
+
+    private static Incident Errors(string plugin, int secondsAfter = 0) =>
+        new(T0.AddSeconds(secondsAfter), plugin, IncidentRule.Errors, 5, 5, "boom");
+
+    private static Incident Unattributed(int secondsAfter = 0) =>
+        new(T0.AddSeconds(secondsAfter), null, IncidentRule.UnattributedStall, 150, 100, "Frame");
+
+    [Fact]
+    public void FirstIncident_Notifies()
+    {
+        var policy = new AlertPolicy(Defaults);
+
+        var d = policy.Decide(Stall("A"), T0);
+
+        Assert.True(d.Notify);
+        Assert.Equal(0, d.SuppressedSinceLast);
+    }
+
+    [Fact]
+    public void WithinCooldown_LogsOnly()
+    {
+        var policy = new AlertPolicy(Defaults);
+        policy.Decide(Stall("A"), T0);
+
+        var d = policy.Decide(Stall("A", 60), T0.AddSeconds(60));
+
+        Assert.False(d.Notify);
+    }
+
+    [Fact]
+    public void AfterCooldown_NotifiesWithSuppressedCount()
+    {
+        var policy = new AlertPolicy(Defaults);
+        policy.Decide(Stall("A"), T0);
+        policy.Decide(Stall("A", 10), T0.AddSeconds(10));
+        policy.Decide(Stall("A", 20), T0.AddSeconds(20));
+        policy.Decide(Stall("A", 30), T0.AddSeconds(30));
+
+        var d = policy.Decide(Stall("A", 301), T0.AddSeconds(301));
+
+        Assert.True(d.Notify);
+        Assert.Equal(3, d.SuppressedSinceLast);
+
+        var next = policy.Decide(Stall("A", 700), T0.AddSeconds(700));
+        Assert.Equal(0, next.SuppressedSinceLast);
+    }
+
+    [Fact]
+    public void ExactlyAtCooldown_Notifies()
+    {
+        var policy = new AlertPolicy(Defaults);
+        policy.Decide(Stall("A"), T0);
+
+        Assert.True(policy.Decide(Stall("A", 300), T0.AddSeconds(300)).Notify);
+    }
+
+    [Fact]
+    public void DifferentRulesForSamePlugin_AreIndependent()
+    {
+        var policy = new AlertPolicy(Defaults);
+        policy.Decide(Stall("A"), T0);
+
+        Assert.True(policy.Decide(Errors("A", 1), T0.AddSeconds(1)).Notify);
+    }
+
+    [Fact]
+    public void DifferentPlugins_AreIndependent()
+    {
+        var policy = new AlertPolicy(Defaults);
+        policy.Decide(Stall("A"), T0);
+
+        Assert.True(policy.Decide(Stall("B", 1), T0.AddSeconds(1)).Notify);
+    }
+
+    [Fact]
+    public void Muted_NeverNotifiesButKeepsCounting()
+    {
+        var policy = new AlertPolicy(Defaults with { Muted = true });
+
+        Assert.False(policy.Decide(Stall("A"), T0).Notify);
+        Assert.False(policy.Decide(Stall("A", 1), T0.AddSeconds(1)).Notify);
+
+        policy.Settings = Defaults;
+        var d = policy.Decide(Stall("A", 2), T0.AddSeconds(2));
+
+        Assert.True(d.Notify);
+        Assert.Equal(2, d.SuppressedSinceLast);
+    }
+
+    [Fact]
+    public void Unattributed_LogsOnlyUnlessEnabled()
+    {
+        var policy = new AlertPolicy(Defaults);
+        Assert.False(policy.Decide(Unattributed(), T0).Notify);
+
+        policy.Settings = Defaults with { NotifyUnattributed = true };
+        Assert.True(policy.Decide(Unattributed(1), T0.AddSeconds(1)).Notify);
+    }
+
+    [Fact]
+    public void CooldownFollowsSettings()
+    {
+        var policy = new AlertPolicy(Defaults with { Cooldown = TimeSpan.FromSeconds(10) });
+        policy.Decide(Stall("A"), T0);
+
+        Assert.False(policy.Decide(Stall("A", 9), T0.AddSeconds(9)).Notify);
+        Assert.True(policy.Decide(Stall("A", 10), T0.AddSeconds(10)).Notify);
+    }
+
+    [Fact]
+    public void Reset_ClearsCooldowns()
+    {
+        var policy = new AlertPolicy(Defaults);
+        policy.Decide(Stall("A"), T0);
+        policy.Reset();
+
+        Assert.True(policy.Decide(Stall("A", 1), T0.AddSeconds(1)).Notify);
+    }
+}
