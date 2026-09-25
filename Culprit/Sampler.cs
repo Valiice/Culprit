@@ -64,7 +64,7 @@ internal sealed class Sampler : IDisposable
     public AlertPolicy Policy { get; }
 
     public IReadOnlyList<ProbeStatus> ProbeStatuses =>
-        [this.frameProbe.Status, this.drawProbe.Status, this.updateProbe.Status, this.logProbe.Status, this.roster.AttributionStatus];
+        [this.frameProbe.Status, this.drawProbe.Status, this.updateProbe.Status, this.logProbe.Status, this.roster.AttributionStatus, this.roster.HandlerMapStatus];
 
     public bool ReducedMode => this.ProbeStatuses.Any(s => !s.Available);
 
@@ -152,6 +152,11 @@ internal sealed class Sampler : IDisposable
             this.drawProbe.Refresh();
         }
 
+        if (this.roster.ShouldRefreshHandlerMap(now))
+        {
+            this.roster.RefreshHandlerMap();
+        }
+
         this.Engine.Suppressed = this.suppression.Evaluate(SuppressingFlags.Any(f => Services.Condition[f]), now);
 
         this.DrainErrors();
@@ -171,7 +176,7 @@ internal sealed class Sampler : IDisposable
 
         foreach (var reading in this.updateProbe.Read())
         {
-            if (this.roster.TypeIndex.ResolveHandlerKey(reading.HandlerKey) is not { } name)
+            if (this.roster.Resolver.Resolve(reading.HandlerKey) is not { } name)
             {
                 // While the background index is still filling in, everything looks unattributed;
                 // recording those would spend the cap on keys that are only temporarily unknown.

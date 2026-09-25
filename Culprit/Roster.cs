@@ -24,21 +24,46 @@ public sealed record PluginInfo(string InternalName, string DisplayName, bool Is
 /// </summary>
 internal sealed class Roster : IDisposable
 {
+    private static readonly TimeSpan HandlerMapRefreshInterval = TimeSpan.FromSeconds(5);
+
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly DalamudInternals internals;
     private readonly Dictionary<string, PluginInfo> plugins = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> byDisplayName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (Guid Mvid, List<string> Names)> typeNamesByPlugin = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource cts = new();
+    private readonly Members? delegateMembers;
     private volatile Dictionary<string, (Guid Mvid, List<string> Names)>? pendingInitial;
     private int dirty;
+    private DateTime lastHandlerMapRefresh = DateTime.MinValue;
+    private bool handlerMapFailureLogged;
 
     public Roster(IDalamudPluginInterface pluginInterface, DalamudInternals internals)
     {
         this.pluginInterface = pluginInterface;
         this.internals = internals;
+        this.Resolver = new HandlerResolver(this.HandlerMap, this.TypeIndex);
         this.RebuildPluginList();
         pluginInterface.ActivePluginsChanged += this.OnActivePluginsChanged;
+
+        try
+        {
+            var frameworkType = internals.GetType("Dalamud.Game.Framework");
+            var frameworkUpdateField = DalamudInternals.Field(frameworkType, "Update");
+            var scopedType = internals.GetType("Dalamud.Game.FrameworkPluginScoped");
+            var scopedPluginField = DalamudInternals.Field(scopedType, "plugin");
+            var scopedUpdateField = DalamudInternals.Field(scopedType, "Update");
+            var localPluginType = internals.GetType("Dalamud.Plugin.Internal.Types.LocalPlugin");
+            var internalNameProperty = DalamudInternals.Property(localPluginType, "InternalName");
+
+            this.delegateMembers = new Members(frameworkUpdateField, scopedType, scopedPluginField, scopedUpdateField, internalNameProperty);
+            this.HandlerMapStatus = ProbeStatus.Ok("Handler map");
+        }
+        catch (Exception e)
+        {
+            this.delegateMembers = null;
+            this.HandlerMapStatus = ProbeStatus.Failed("Handler map", e);
+        }
 
         this.Indexing = true;
         var token = this.cts.Token;
@@ -89,7 +114,13 @@ internal sealed class Roster : IDisposable
 
     public TypeIndex TypeIndex { get; } = new();
 
+    public HandlerKeyMap HandlerMap { get; } = new();
+
+    public HandlerResolver Resolver { get; }
+
     public ProbeStatus AttributionStatus { get; private set; } = ProbeStatus.Ok("Attribution");
+
+    public ProbeStatus HandlerMapStatus { get; private set; } = ProbeStatus.Ok("Handler map");
 
     /// <summary>True while the initial background type index build has not yet been adopted.</summary>
     public bool Indexing { get; private set; }
@@ -175,6 +206,79 @@ internal sealed class Roster : IDisposable
             Services.Log.Warning(e, "Culprit could not build the type index; update handlers will be unattributed");
             this.AttributionStatus = ProbeStatus.Failed("Attribution", e);
         }
+
+        this.RefreshHandlerMap();
+    }
+
+    /// <summary>True once at least 5 seconds passed since the handler map was last refreshed.</summary>
+    public bool ShouldRefreshHandlerMap(DateTime now) => now - this.lastHandlerMapRefresh >= HandlerMapRefreshInterval;
+
+    /// <summary>
+    /// Rebuilds HandlerMap from Dalamud's own Framework.Update subscription lists: one
+    /// FrameworkPluginScoped entry per plugin, each holding that plugin's own Update delegate.
+    /// This gives an exact key-to-plugin map for every handler, including static handlers and
+    /// lambdas that a type-name index cannot place, in microseconds. Entries on the global
+    /// delegate that are not scoped to a plugin belong to Dalamud itself. Framework thread only.
+    /// </summary>
+    public void RefreshHandlerMap()
+    {
+        this.lastHandlerMapRefresh = DateTime.UtcNow;
+
+        if (this.delegateMembers is not { } members)
+        {
+            return;
+        }
+
+        try
+        {
+            this.HandlerMap.Clear();
+
+            var framework = this.internals.GetService("Dalamud.Game.Framework");
+            if (members.FrameworkUpdateField.GetValue(framework) is not Delegate globalUpdate)
+            {
+                this.HandlerMapStatus = ProbeStatus.Ok("Handler map");
+                this.handlerMapFailureLogged = false;
+                return;
+            }
+
+            foreach (var entry in globalUpdate.GetInvocationList())
+            {
+                if (members.ScopedType.IsInstanceOfType(entry.Target))
+                {
+                    var plugin = members.ScopedPluginField.GetValue(entry.Target);
+                    if (plugin is null || members.InternalNameProperty.GetValue(plugin) is not string internalName)
+                    {
+                        continue;
+                    }
+
+                    if (members.ScopedUpdateField.GetValue(entry.Target) is not Delegate scopedUpdate)
+                    {
+                        continue;
+                    }
+
+                    foreach (var handler in scopedUpdate.GetInvocationList())
+                    {
+                        this.HandlerMap.Add($"{handler.Target}::{handler.Method.Name}", internalName);
+                    }
+                }
+                else
+                {
+                    this.HandlerMap.Add($"{entry.Target}::{entry.Method.Name}", HandlerResolver.DalamudInternalName);
+                }
+            }
+
+            this.HandlerMapStatus = ProbeStatus.Ok("Handler map");
+            this.handlerMapFailureLogged = false;
+        }
+        catch (Exception e)
+        {
+            this.HandlerMapStatus = ProbeStatus.Failed("Handler map", e);
+            if (!this.handlerMapFailureLogged)
+            {
+                Services.Log.Warning(e, "Culprit could not build the handler map; some update handlers may be unattributed");
+                this.handlerMapFailureLogged = true;
+            }
+        }
     }
 
     private void RebuildPluginList()
@@ -191,6 +295,9 @@ internal sealed class Roster : IDisposable
             this.plugins[plugin.InternalName] = new PluginInfo(plugin.InternalName, plugin.Name, plugin.IsDev);
             this.byDisplayName[plugin.Name] = plugin.InternalName;
         }
+
+        this.plugins[HandlerResolver.DalamudInternalName] = new PluginInfo(HandlerResolver.DalamudInternalName, "Dalamud (internal)", false);
+        this.byDisplayName["Dalamud (internal)"] = HandlerResolver.DalamudInternalName;
     }
 
     /// <summary>The loaded plugins and their assemblies, read via Dalamud's internal LocalPlugin list.</summary>
@@ -255,4 +362,12 @@ internal sealed class Roster : IDisposable
             return [];
         }
     }
+
+    /// <summary>Reflection members needed to walk Dalamud's Framework.Update subscription lists.</summary>
+    private sealed record Members(
+        FieldInfo FrameworkUpdateField,
+        Type ScopedType,
+        FieldInfo ScopedPluginField,
+        FieldInfo ScopedUpdateField,
+        PropertyInfo InternalNameProperty);
 }

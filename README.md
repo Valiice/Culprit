@@ -38,6 +38,8 @@ Dalamud already times every plugin's draw and update callbacks for its own Plugi
 
 Those counters are Dalamud internals, not public API. If a Dalamud update changes them, the Live tab shows which signal became unavailable and Culprit keeps running with what is left.
 
+Update handlers are matched to plugins through Dalamud's own subscription lists, which also covers static handlers and shared libraries, and Dalamud's internal handlers appear as "Dalamud (internal)".
+
 Turning on Dalamud's update-time tracking has one side effect on other plugins: while it is on, Dalamud logs their update-handler exceptions as a generic framework error without the plugin name, and the dev-plugin error toast does not appear. Culprit still attributes those errors through the exception's stack trace. Unloading Culprit restores the previous setting.
 
 ## Limitations

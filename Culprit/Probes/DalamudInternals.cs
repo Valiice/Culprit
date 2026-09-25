@@ -31,4 +31,7 @@ internal sealed class DalamudInternals
 
     public static EventInfo Event(Type type, string name) =>
         type.GetEvent(name, Any) ?? throw new MissingMemberException(type.FullName, name);
+
+    public static FieldInfo Field(Type type, string name) =>
+        type.GetField(name, Any) ?? throw new MissingMemberException(type.FullName, name);
 }
