@@ -7,9 +7,9 @@ namespace Culprit;
 
 public class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
-    public double StallMs { get; set; } = 20;
+    public double StallMs { get; set; } = 40;
 
     public double SustainedMs { get; set; } = 3;
 
@@ -51,6 +51,13 @@ public class Configuration : IPluginConfiguration
         }
 
         config.IgnoredPlugins ??= [];
+
+        if (config.Version < 2 && config.StallMs == 20)
+        {
+            config.StallMs = 40;
+        }
+
+        config.Version = 2;
 
         config.StallMs = Math.Clamp(config.StallMs, 5, 500);
         config.SustainedMs = Math.Clamp(config.SustainedMs, 0.5, 50);

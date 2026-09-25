@@ -144,6 +144,6 @@ public class StatsReportTests
         var text = StatsReport.Format(Context());
 
         var line = text.Split('\n').Single(l => l.StartsWith("  Stall", StringComparison.Ordinal));
-        Assert.Equal("  Stall 20 ms, Sustained 3.0 ms over 5 s, Errors 5 in 60 s, Unattributed 100 ms", line);
+        Assert.Equal("  Stall 40 ms, Sustained 3.0 ms over 5 s, Errors 5 in 60 s, Unattributed 100 ms", line);
     }
 }

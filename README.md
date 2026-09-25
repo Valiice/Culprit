@@ -23,7 +23,7 @@ The Live tab shows each plugin's latest and longest draw and update times, its 5
 
 ## What counts as a hiccup
 
-- Stall: a plugin's draw or update took longer than the stall limit in one frame (default 20 ms).
+- Stall: a plugin's draw or update took longer than the stall limit in one frame (default 40 ms).
 - Sustained: a plugin averaged more than the sustained limit per frame over a window (default 3 ms over 5 s).
 - Errors: a plugin logged at least the error count within the error window (default 5 in 60 s).
 - Unattributed: the whole frame was long but no plugin crossed the stall limit. Logged, not shown, unless you enable it.

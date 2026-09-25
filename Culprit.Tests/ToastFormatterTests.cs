@@ -49,7 +49,7 @@ public class ToastFormatterTests
     {
         var i = new Incident(T0, null, IncidentRule.UnattributedStall, 150.7, 100, "Frame");
 
-        Assert.Equal("Frame took 151 ms with no plugin over 20 ms", ToastFormatter.Body(i, T, 0));
+        Assert.Equal("Frame took 151 ms with no plugin over 20 ms", ToastFormatter.Body(i, new Thresholds(StallMs: 20), 0));
     }
 
     [Fact]

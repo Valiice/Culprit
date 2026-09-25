@@ -15,7 +15,7 @@ public class EngineStallTests
     [Fact]
     public void DrawAboveStallMs_ProducesStallIncident()
     {
-        var engine = new Engine(new Thresholds(), "Culprit");
+        var engine = new Engine(new Thresholds(StallMs: 20), "Culprit");
 
         var incidents = engine.Process(Frame(30, new PluginTiming("Heavy", 25, 0)));
 
@@ -30,7 +30,7 @@ public class EngineStallTests
     [Fact]
     public void UpdateAboveStallMs_ProducesStallIncidentWithUpdateDetail()
     {
-        var engine = new Engine(new Thresholds(), "Culprit");
+        var engine = new Engine(new Thresholds(StallMs: 20), "Culprit");
 
         var incidents = engine.Process(Frame(30, new PluginTiming("Heavy", 0, 21)));
 
@@ -42,7 +42,7 @@ public class EngineStallTests
     [Fact]
     public void ExactlyStallMs_IsNotAStall()
     {
-        var engine = new Engine(new Thresholds(), "Culprit");
+        var engine = new Engine(new Thresholds(StallMs: 20), "Culprit");
 
         var incidents = engine.Process(Frame(10, new PluginTiming("Fine", 20, 20)));
 
@@ -52,7 +52,7 @@ public class EngineStallTests
     [Fact]
     public void DrawAndUpdateBothOver_ProduceTwoIncidents()
     {
-        var engine = new Engine(new Thresholds(), "Culprit");
+        var engine = new Engine(new Thresholds(StallMs: 20), "Culprit");
 
         var incidents = engine.Process(Frame(60, new PluginTiming("Heavy", 25, 25)));
 
@@ -131,7 +131,7 @@ public class EngineStallTests
     [Fact]
     public void RepeatedStall_IsCoalescedWithinOneSecond()
     {
-        var engine = new Engine(new Thresholds(), "Culprit");
+        var engine = new Engine(new Thresholds(StallMs: 20), "Culprit");
 
         var incidents = new List<Incident>();
         for (var i = 0; i < 3; i++)
@@ -146,7 +146,7 @@ public class EngineStallTests
     [Fact]
     public void StallAfterOneSecond_FiresAgain()
     {
-        var engine = new Engine(new Thresholds(), "Culprit");
+        var engine = new Engine(new Thresholds(StallMs: 20), "Culprit");
 
         var incidents = new List<Incident>();
         for (var i = 0; i < 3; i++)

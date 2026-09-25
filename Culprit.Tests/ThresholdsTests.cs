@@ -10,7 +10,7 @@ public class ThresholdsTests
     {
         var t = new Thresholds();
 
-        Assert.Equal(20, t.StallMs);
+        Assert.Equal(40, t.StallMs);
         Assert.Equal(3, t.SustainedMs);
         Assert.Equal(5, t.SustainedWindowSeconds);
         Assert.Equal(5, t.ErrorCount);
