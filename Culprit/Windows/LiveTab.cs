@@ -1,3 +1,4 @@
+using System.Globalization;
 using Dalamud.Bindings.ImGui;
 
 namespace Culprit.Windows;
@@ -117,7 +118,7 @@ internal sealed class LiveTab
             ImGui.TextDisabled("Attribution: indexing plugin assemblies");
         }
 
-        ImGui.TextDisabled($"GC: {this.sampler.GcGen2Collections.ToString(System.Globalization.CultureInfo.InvariantCulture)} gen2 collections, {this.sampler.GcTotalPauseMs.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} ms total pause");
+        ImGui.TextDisabled($"GC: {this.sampler.GcGen2Collections.ToString(CultureInfo.InvariantCulture)} gen2 collections, {this.sampler.GcTotalPauseMs.ToString("0", CultureInfo.InvariantCulture)} ms total pause");
 
         if (this.sampler.ReducedMode)
         {

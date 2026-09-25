@@ -116,7 +116,7 @@ public class StatsReportTests
     {
         var text = StatsReport.Format(Context(gcGen2Collections: 4, gcTotalPauseMs: 812.3));
 
-        Assert.Contains("GC: 4 gen2 collections, 812 ms total pause since load", text);
+        Assert.Contains("GC: 4 gen2 collections, 812 ms total pause since the process started", text);
     }
 
     [Fact]

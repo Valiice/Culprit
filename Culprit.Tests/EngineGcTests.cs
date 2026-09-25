@@ -45,6 +45,28 @@ public class EngineGcTests
     }
 
     [Fact]
+    public void GcHeavyFrame_WhilePaused_ProducesNothing()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit") { Paused = true };
+
+        var incidents = engine.Process(new FrameSample(T0, 120, [new PluginTiming("P", 90, 0)], 110));
+
+        Assert.Empty(incidents);
+    }
+
+    [Fact]
+    public void GcPauseExactlyHalfTheFrame_CountsAsGcHeavy()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+
+        var incidents = engine.Process(new FrameSample(T0, 120, [new PluginTiming("P", 90, 0)], 60));
+
+        var i = Assert.Single(incidents);
+        Assert.Equal(IncidentRule.UnattributedStall, i.Rule);
+        Assert.Equal("GC pause 60 ms", i.Detail);
+    }
+
+    [Fact]
     public void GcHeavyFrames_DoNotFeedTheSustainedWindow()
     {
         var engine = new Engine(new Thresholds(), "Culprit");

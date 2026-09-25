@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Reflection;
+using System.Threading;
 using Culprit.Core.Attribution;
 using Culprit.Probes;
 using Dalamud.Plugin;
@@ -13,9 +14,13 @@ public sealed record PluginInfo(string InternalName, string DisplayName, bool Is
 /// each loaded plugin's assembly so update-handler keys can be mapped back to a plugin. The
 /// index is incremental: the constructor kicks off a full build on a background thread (so the
 /// game does not stall on startup), and once that lands, Rebuild() only reflects over plugins
-/// that were not indexed yet, removing entries for plugins that unloaded. Dalamud can raise
-/// ActivePluginsChanged on a thread-pool thread, so the handler only sets a dirty flag; the
-/// sampler rebuilds on the framework thread via Rebuild() and ConsumeDirty().
+/// that are not indexed yet or whose assembly changed (a dev plugin reload gets a new
+/// ModuleVersionId even though the internal name is unchanged), removing entries for plugins
+/// that unloaded. Until the background build lands, Rebuild() only refreshes the plugin list and
+/// leaves the type index alone, so every plugin does not look "new" and force a full scan on the
+/// framework thread. Dalamud can raise ActivePluginsChanged on a thread-pool thread, so the
+/// handler only sets a dirty flag; the sampler rebuilds on the framework thread via Rebuild() and
+/// ConsumeDirty().
 /// </summary>
 internal sealed class Roster : IDisposable
 {
@@ -23,9 +28,10 @@ internal sealed class Roster : IDisposable
     private readonly DalamudInternals internals;
     private readonly Dictionary<string, PluginInfo> plugins = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> byDisplayName = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, List<string>> typeNamesByPlugin = new(StringComparer.Ordinal);
-    private volatile Dictionary<string, List<string>>? pendingInitial;
-    private volatile bool dirty;
+    private readonly Dictionary<string, (Guid Mvid, List<string> Names)> typeNamesByPlugin = new(StringComparer.Ordinal);
+    private readonly CancellationTokenSource cts = new();
+    private volatile Dictionary<string, (Guid Mvid, List<string> Names)>? pendingInitial;
+    private int dirty;
 
     public Roster(IDalamudPluginInterface pluginInterface, DalamudInternals internals)
     {
@@ -35,26 +41,46 @@ internal sealed class Roster : IDisposable
         pluginInterface.ActivePluginsChanged += this.OnActivePluginsChanged;
 
         this.Indexing = true;
+        var token = this.cts.Token;
         Task.Run(() =>
         {
             try
             {
-                var initial = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+                var initial = new Dictionary<string, (Guid, List<string>)>(StringComparer.Ordinal);
                 foreach (var (name, assembly) in this.LoadedPluginAssemblies())
                 {
-                    initial[name] = TypeNames(assembly);
+                    if (token.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    initial[name] = (assembly.ManifestModule.ModuleVersionId, TypeNames(assembly));
+                }
+
+                if (token.IsCancellationRequested)
+                {
+                    return;
                 }
 
                 this.pendingInitial = initial;
             }
             catch (Exception e)
             {
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 Services.Log.Warning(e, "Culprit could not build the initial type index; update handlers will be unattributed");
                 this.AttributionStatus = ProbeStatus.Failed("Attribution", e);
+                this.Indexing = false;
             }
             finally
             {
-                this.dirty = true;
+                if (!token.IsCancellationRequested)
+                {
+                    Interlocked.Exchange(ref this.dirty, 1);
+                }
             }
         });
     }
@@ -78,16 +104,16 @@ internal sealed class Roster : IDisposable
         this.pluginInterface.GetPlugin(assembly)?.InternalName;
 
     /// <summary>Returns whether the plugin set changed since the last call, clearing the flag.</summary>
-    public bool ConsumeDirty()
+    public bool ConsumeDirty() => Interlocked.Exchange(ref this.dirty, 0) == 1;
+
+    public void Dispose()
     {
-        var wasDirty = this.dirty;
-        this.dirty = false;
-        return wasDirty;
+        this.pluginInterface.ActivePluginsChanged -= this.OnActivePluginsChanged;
+        this.cts.Cancel();
+        this.cts.Dispose();
     }
 
-    public void Dispose() => this.pluginInterface.ActivePluginsChanged -= this.OnActivePluginsChanged;
-
-    private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args) => this.dirty = true;
+    private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args) => Interlocked.Exchange(ref this.dirty, 1);
 
     public void Rebuild()
     {
@@ -96,13 +122,22 @@ internal sealed class Roster : IDisposable
         if (this.pendingInitial is { } initial)
         {
             this.typeNamesByPlugin.Clear();
-            foreach (var (name, names) in initial)
+            foreach (var (name, entry) in initial)
             {
-                this.typeNamesByPlugin[name] = names;
+                this.typeNamesByPlugin[name] = entry;
             }
 
             this.pendingInitial = null;
             this.Indexing = false;
+        }
+
+        if (this.Indexing)
+        {
+            // The background build has not landed yet: the cache is still empty, so every loaded
+            // plugin would look "new" and force a full GetTypes() scan on the framework thread,
+            // which is exactly the stall this incremental index exists to avoid. Wait for it; the
+            // reconcile below will pick up anything that loaded in the meantime once it lands.
+            return;
         }
 
         try
@@ -112,9 +147,10 @@ internal sealed class Roster : IDisposable
 
             foreach (var (name, assembly) in loaded)
             {
-                if (!this.typeNamesByPlugin.ContainsKey(name))
+                var mvid = assembly.ManifestModule.ModuleVersionId;
+                if (!this.typeNamesByPlugin.TryGetValue(name, out var cached) || cached.Mvid != mvid)
                 {
-                    this.typeNamesByPlugin[name] = TypeNames(assembly);
+                    this.typeNamesByPlugin[name] = (mvid, TypeNames(assembly));
                 }
             }
 
@@ -124,9 +160,9 @@ internal sealed class Roster : IDisposable
             }
 
             this.TypeIndex.Clear();
-            foreach (var (name, names) in this.typeNamesByPlugin)
+            foreach (var (name, entry) in this.typeNamesByPlugin)
             {
-                foreach (var typeName in names)
+                foreach (var typeName in entry.Names)
                 {
                     this.TypeIndex.Add(typeName, name);
                 }

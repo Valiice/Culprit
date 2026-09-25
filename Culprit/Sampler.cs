@@ -173,7 +173,9 @@ internal sealed class Sampler : IDisposable
         {
             if (this.roster.TypeIndex.ResolveHandlerKey(reading.HandlerKey) is not { } name)
             {
-                if (this.unattributedHandlers.Count < MaxUnattributedHandlers)
+                // While the background index is still filling in, everything looks unattributed;
+                // recording those would spend the cap on keys that are only temporarily unknown.
+                if (!this.roster.Indexing && this.unattributedHandlers.Count < MaxUnattributedHandlers)
                 {
                     this.unattributedHandlers.Add(reading.HandlerKey);
                 }

@@ -16,6 +16,9 @@ namespace Culprit.Core.Detection;
 /// </summary>
 public sealed class Engine
 {
+    /// <summary>Prefix of the Detail on a GC-heavy UnattributedStall incident; shared with ToastFormatter.</summary>
+    public const string GcPauseDetailPrefix = "GC pause";
+
     private readonly Dictionary<string, PluginWindow> windows = new(StringComparer.Ordinal);
     private readonly string selfInternalName;
 
@@ -119,7 +122,7 @@ public sealed class Engine
         {
             if (sample.FrameMs > t.UnattributedMs)
             {
-                var detail = string.Format(CultureInfo.InvariantCulture, "GC pause {0:0} ms", sample.GcPauseMs);
+                var detail = string.Format(CultureInfo.InvariantCulture, "{0} {1:0} ms", GcPauseDetailPrefix, sample.GcPauseMs);
                 incidents.Add(new Incident(sample.Timestamp, null, IncidentRule.UnattributedStall, sample.FrameMs, t.UnattributedMs, detail));
             }
 
