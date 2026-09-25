@@ -66,7 +66,11 @@ internal sealed class Sampler : IDisposable
     public IReadOnlyList<ProbeStatus> ProbeStatuses =>
         [this.frameProbe.Status, this.drawProbe.Status, this.updateProbe.Status, this.logProbe.Status, this.roster.AttributionStatus, this.roster.HandlerMapStatus];
 
-    public bool ReducedMode => this.ProbeStatuses.Any(s => !s.Available);
+    /// <summary>
+    /// Excludes the handler map: when it fails, update-handler attribution still works through
+    /// the type index, just without exact coverage for statics, lambdas, and shared libraries.
+    /// </summary>
+    public bool ReducedMode => this.ProbeStatuses.Any(s => !s.Available && s.Name != Roster.HandlerMapProbeName);
 
     /// <summary>Update-handler keys that could not be attributed to a plugin, capped at 200.</summary>
     public IReadOnlyCollection<string> UnattributedHandlers => this.unattributedHandlers;
@@ -228,7 +232,7 @@ internal sealed class Sampler : IDisposable
                 HitchKind.Draw when !this.drawProbe.Status.Available =>
                     new HitchEvent(raw.Timestamp, this.roster.InternalNameForDisplay(parsed.Target), raw.Ms, raw.LimitMs, "Draw"),
                 HitchKind.Update when !this.updateProbe.Status.Available =>
-                    new HitchEvent(raw.Timestamp, this.roster.TypeIndex.ResolveHandlerKey(parsed.Target), raw.Ms, raw.LimitMs, "Update"),
+                    new HitchEvent(raw.Timestamp, this.roster.Resolver.Resolve(parsed.Target), raw.Ms, raw.LimitMs, "Update"),
                 _ => null,
             };
 

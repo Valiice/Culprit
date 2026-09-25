@@ -24,6 +24,8 @@ public sealed record PluginInfo(string InternalName, string DisplayName, bool Is
 /// </summary>
 internal sealed class Roster : IDisposable
 {
+    public const string HandlerMapProbeName = "Handler map";
+
     private static readonly TimeSpan HandlerMapRefreshInterval = TimeSpan.FromSeconds(5);
 
     private readonly IDalamudPluginInterface pluginInterface;
@@ -50,19 +52,20 @@ internal sealed class Roster : IDisposable
         {
             var frameworkType = internals.GetType("Dalamud.Game.Framework");
             var frameworkUpdateField = DalamudInternals.Field(frameworkType, "Update");
+            var framework = internals.GetService("Dalamud.Game.Framework");
             var scopedType = internals.GetType("Dalamud.Game.FrameworkPluginScoped");
             var scopedPluginField = DalamudInternals.Field(scopedType, "plugin");
             var scopedUpdateField = DalamudInternals.Field(scopedType, "Update");
             var localPluginType = internals.GetType("Dalamud.Plugin.Internal.Types.LocalPlugin");
             var internalNameProperty = DalamudInternals.Property(localPluginType, "InternalName");
 
-            this.delegateMembers = new Members(frameworkUpdateField, scopedType, scopedPluginField, scopedUpdateField, internalNameProperty);
-            this.HandlerMapStatus = ProbeStatus.Ok("Handler map");
+            this.delegateMembers = new Members(framework, frameworkUpdateField, scopedType, scopedPluginField, scopedUpdateField, internalNameProperty);
+            this.HandlerMapStatus = ProbeStatus.Ok(HandlerMapProbeName);
         }
         catch (Exception e)
         {
             this.delegateMembers = null;
-            this.HandlerMapStatus = ProbeStatus.Failed("Handler map", e);
+            this.HandlerMapStatus = ProbeStatus.Failed(HandlerMapProbeName, e);
         }
 
         this.Indexing = true;
@@ -120,7 +123,7 @@ internal sealed class Roster : IDisposable
 
     public ProbeStatus AttributionStatus { get; private set; } = ProbeStatus.Ok("Attribution");
 
-    public ProbeStatus HandlerMapStatus { get; private set; } = ProbeStatus.Ok("Handler map");
+    public ProbeStatus HandlerMapStatus { get; private set; } = ProbeStatus.Ok(HandlerMapProbeName);
 
     /// <summary>True while the initial background type index build has not yet been adopted.</summary>
     public bool Indexing { get; private set; }
@@ -161,6 +164,10 @@ internal sealed class Roster : IDisposable
             this.pendingInitial = null;
             this.Indexing = false;
         }
+
+        // The handler map does not depend on the type index, so it refreshes even while the
+        // background type-index build has not landed yet.
+        this.RefreshHandlerMap();
 
         if (this.Indexing)
         {
@@ -206,8 +213,6 @@ internal sealed class Roster : IDisposable
             Services.Log.Warning(e, "Culprit could not build the type index; update handlers will be unattributed");
             this.AttributionStatus = ProbeStatus.Failed("Attribution", e);
         }
-
-        this.RefreshHandlerMap();
     }
 
     /// <summary>True once at least 5 seconds passed since the handler map was last refreshed.</summary>
@@ -233,10 +238,9 @@ internal sealed class Roster : IDisposable
         {
             this.HandlerMap.Clear();
 
-            var framework = this.internals.GetService("Dalamud.Game.Framework");
-            if (members.FrameworkUpdateField.GetValue(framework) is not Delegate globalUpdate)
+            if (members.FrameworkUpdateField.GetValue(members.Framework) is not Delegate globalUpdate)
             {
-                this.HandlerMapStatus = ProbeStatus.Ok("Handler map");
+                this.HandlerMapStatus = ProbeStatus.Ok(HandlerMapProbeName);
                 this.handlerMapFailureLogged = false;
                 return;
             }
@@ -267,12 +271,15 @@ internal sealed class Roster : IDisposable
                 }
             }
 
-            this.HandlerMapStatus = ProbeStatus.Ok("Handler map");
+            this.HandlerMapStatus = ProbeStatus.Ok(HandlerMapProbeName);
             this.handlerMapFailureLogged = false;
         }
         catch (Exception e)
         {
-            this.HandlerMapStatus = ProbeStatus.Failed("Handler map", e);
+            // A half-built map from this attempt could resolve a key that would have become
+            // ambiguous had the loop reached its other occurrence, so drop it rather than serve it.
+            this.HandlerMap.Clear();
+            this.HandlerMapStatus = ProbeStatus.Failed(HandlerMapProbeName, e);
             if (!this.handlerMapFailureLogged)
             {
                 Services.Log.Warning(e, "Culprit could not build the handler map; some update handlers may be unattributed");
@@ -365,6 +372,7 @@ internal sealed class Roster : IDisposable
 
     /// <summary>Reflection members needed to walk Dalamud's Framework.Update subscription lists.</summary>
     private sealed record Members(
+        object Framework,
         FieldInfo FrameworkUpdateField,
         Type ScopedType,
         FieldInfo ScopedPluginField,
