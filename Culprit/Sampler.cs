@@ -18,6 +18,8 @@ namespace Culprit;
 /// </summary>
 internal sealed class Sampler : IDisposable
 {
+    private const int MaxUnattributedHandlers = 200;
+
     private static readonly ConditionFlag[] SuppressingFlags =
     [
         ConditionFlag.BetweenAreas,
@@ -36,6 +38,7 @@ internal sealed class Sampler : IDisposable
     private readonly SuppressionTracker suppression = new(TimeSpan.FromSeconds(5));
     private readonly Notifier notifier;
     private readonly Dictionary<string, (double Draw, double Update)> frameTimings = new(StringComparer.Ordinal);
+    private readonly HashSet<string> unattributedHandlers = new(StringComparer.Ordinal);
 
     public Sampler(Configuration config, Roster roster, DrawStatsProbe drawProbe, UpdateStatsProbe updateProbe, LogProbe logProbe, Notifier notifier)
     {
@@ -64,6 +67,9 @@ internal sealed class Sampler : IDisposable
         [this.frameProbe.Status, this.drawProbe.Status, this.updateProbe.Status, this.logProbe.Status, this.roster.AttributionStatus];
 
     public bool ReducedMode => this.ProbeStatuses.Any(s => !s.Available);
+
+    /// <summary>Update-handler keys that could not be attributed to a plugin, capped at 200.</summary>
+    public IReadOnlyCollection<string> UnattributedHandlers => this.unattributedHandlers;
 
     /// <summary>Short warnings for probes whose Dalamud-side tracking switch is currently off.</summary>
     public IReadOnlyList<string> TrackingWarnings
@@ -108,6 +114,7 @@ internal sealed class Sampler : IDisposable
         this.Engine.Reset();
         this.Store.Reset();
         this.Policy.Reset();
+        this.unattributedHandlers.Clear();
     }
 
     public void Dispose()
@@ -160,6 +167,11 @@ internal sealed class Sampler : IDisposable
         {
             if (this.roster.TypeIndex.ResolveHandlerKey(reading.HandlerKey) is not { } name)
             {
+                if (this.unattributedHandlers.Count < MaxUnattributedHandlers)
+                {
+                    this.unattributedHandlers.Add(reading.HandlerKey);
+                }
+
                 continue;
             }
 

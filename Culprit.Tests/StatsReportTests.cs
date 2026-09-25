@@ -12,7 +12,8 @@ public class StatsReportTests
         bool paused = false,
         IReadOnlyList<ReportProbe>? probes = null,
         IReadOnlyList<ReportPluginRow>? plugins = null,
-        IReadOnlyList<ReportIncident>? incidents = null) =>
+        IReadOnlyList<ReportIncident>? incidents = null,
+        IReadOnlyList<string>? unattributedHandlers = null) =>
         new(
             T0,
             "1.2.3",
@@ -21,7 +22,8 @@ public class StatsReportTests
             probes ?? [],
             new Thresholds(),
             plugins ?? [],
-            incidents ?? []);
+            incidents ?? [],
+            unattributedHandlers ?? []);
 
     [Fact]
     public void Header_ContainsBothVersionsAndPausedState()
@@ -103,6 +105,25 @@ public class StatsReportTests
 
         Assert.Contains("showing 0 of 0", text);
         Assert.Contains("\n  none", text);
+    }
+
+    [Fact]
+    public void Format_ListsUnattributedHandlers()
+    {
+        var text = StatsReport.Format(Context(unattributedHandlers: ["InventoryTools.Services.OverlayService::FrameworkOnUpdate", "Other.Type::OnUpdate"]));
+
+        Assert.Contains("Unattributed update handlers (2)", text);
+        var lines = text.Split('\n');
+        Assert.Contains(lines, l => l == "  InventoryTools.Services.OverlayService::FrameworkOnUpdate");
+        Assert.Contains(lines, l => l == "  Other.Type::OnUpdate");
+    }
+
+    [Fact]
+    public void Format_NoUnattributedHandlers_PrintsNone()
+    {
+        var text = StatsReport.Format(Context());
+
+        Assert.Contains("Unattributed update handlers (0)\n  none", text);
     }
 
     [Fact]

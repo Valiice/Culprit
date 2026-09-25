@@ -15,7 +15,8 @@ public sealed record ReportIncident(
 public sealed record ReportContext(
     DateTime GeneratedUtc, string CulpritVersion, string DalamudVersion, bool Paused,
     IReadOnlyList<ReportProbe> Probes, Thresholds Thresholds,
-    IReadOnlyList<ReportPluginRow> Plugins, IReadOnlyList<ReportIncident> Incidents);
+    IReadOnlyList<ReportPluginRow> Plugins, IReadOnlyList<ReportIncident> Incidents,
+    IReadOnlyList<string> UnattributedHandlers);
 
 /// <summary>Renders a plain text stats report for sharing or for a tool to read from disk.</summary>
 public static class StatsReport
@@ -63,6 +64,20 @@ public static class StatsReport
                 $"  {Clean(p.DisplayName)} | {Clean(p.InternalName)} | {p.LastDrawMs.ToString("0.0", ci)} | {p.LongestDrawMs.ToString("0.0", ci)} | "
                 + $"{p.LastUpdateMs.ToString("0.0", ci)} | {p.LongestUpdateMs.ToString("0.0", ci)} | {p.AverageMs.ToString("0.0", ci)} | "
                 + $"{p.Errors.ToString(ci)} | {p.Incidents.ToString(ci)} | {(p.Ignored ? "yes" : "no")}");
+        }
+
+        lines.Add(string.Empty);
+        lines.Add($"Unattributed update handlers ({context.UnattributedHandlers.Count.ToString(ci)})");
+        if (context.UnattributedHandlers.Count == 0)
+        {
+            lines.Add("  none");
+        }
+        else
+        {
+            foreach (var key in context.UnattributedHandlers)
+            {
+                lines.Add($"  {Clean(key)}");
+            }
         }
 
         var total = context.Incidents.Count;

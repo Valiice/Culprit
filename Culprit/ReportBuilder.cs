@@ -69,7 +69,8 @@ internal sealed class ReportBuilder
             probes,
             this.sampler.Engine.Thresholds,
             this.Rows(),
-            incidents);
+            incidents,
+            this.sampler.UnattributedHandlers.OrderBy(k => k, StringComparer.Ordinal).ToList());
 
         return StatsReport.Format(context);
     }
