@@ -73,6 +73,80 @@ public class AttributionTests
         Assert.Equal("PlatePeek", same.ResolveType("PlatePeek.Plugin"));
     }
 
+    [Fact]
+    public void HandlerKeyMap_ResolvesStaticKeyToPlugin()
+    {
+        var map = new HandlerKeyMap();
+        map.Add("::RSRCommonUpdate", "RotationSolverReborn");
+
+        Assert.Equal("RotationSolverReborn", map.Resolve("::RSRCommonUpdate"));
+        Assert.True(map.Contains("::RSRCommonUpdate"));
+        Assert.Equal(1, map.Count);
+    }
+
+    [Fact]
+    public void HandlerKeyMap_ConflictingAdd_IsAmbiguousButStillContained()
+    {
+        var map = new HandlerKeyMap();
+        map.Add("Shared.Type::OnUpdate", "First");
+        map.Add("Shared.Type::OnUpdate", "Second");
+
+        Assert.Null(map.Resolve("Shared.Type::OnUpdate"));
+        Assert.True(map.Contains("Shared.Type::OnUpdate"));
+
+        var same = new HandlerKeyMap();
+        same.Add("PlatePeek.Plugin::OnUpdate", "PlatePeek");
+        same.Add("PlatePeek.Plugin::OnUpdate", "PlatePeek");
+
+        Assert.Equal("PlatePeek", same.Resolve("PlatePeek.Plugin::OnUpdate"));
+    }
+
+    [Fact]
+    public void HandlerKeyMap_UnknownKey_IsNotContained()
+    {
+        var map = new HandlerKeyMap();
+        map.Add("PlatePeek.Plugin::OnUpdate", "PlatePeek");
+
+        Assert.False(map.Contains("Other.Plugin::OnUpdate"));
+        Assert.Null(map.Resolve("Other.Plugin::OnUpdate"));
+    }
+
+    [Fact]
+    public void HandlerResolver_PrefersTheMapOverTheTypeIndex()
+    {
+        var map = new HandlerKeyMap();
+        map.Add("PlatePeek.Plugin::OnUpdate", "PlatePeek");
+        var typeIndex = new TypeIndex();
+        typeIndex.Add("PlatePeek.Plugin", "SomeOtherAnswer");
+        var resolver = new HandlerResolver(map, typeIndex);
+
+        Assert.Equal("PlatePeek", resolver.Resolve("PlatePeek.Plugin::OnUpdate"));
+    }
+
+    [Fact]
+    public void HandlerResolver_FallsThroughToTheTypeIndexForUnknownKeys()
+    {
+        var map = new HandlerKeyMap();
+        var typeIndex = new TypeIndex();
+        typeIndex.Add("PlatePeek.Plugin", "PlatePeek");
+        var resolver = new HandlerResolver(map, typeIndex);
+
+        Assert.Equal("PlatePeek", resolver.Resolve("PlatePeek.Plugin::OnUpdate"));
+    }
+
+    [Fact]
+    public void HandlerResolver_AmbiguousMapKey_ReturnsNullRatherThanFallingThrough()
+    {
+        var map = new HandlerKeyMap();
+        map.Add("PlatePeek.Plugin::OnUpdate", "First");
+        map.Add("PlatePeek.Plugin::OnUpdate", "Second");
+        var typeIndex = new TypeIndex();
+        typeIndex.Add("PlatePeek.Plugin", "PlatePeek");
+        var resolver = new HandlerResolver(map, typeIndex);
+
+        Assert.Null(resolver.Resolve("PlatePeek.Plugin::OnUpdate"));
+    }
+
     [Theory]
     [InlineData("UiBuilder(PlatePeek)", HitchKind.Draw, "PlatePeek")]
     [InlineData("UiBuilder(Some Plugin With Spaces)", HitchKind.Draw, "Some Plugin With Spaces")]
