@@ -71,6 +71,12 @@ internal sealed class Sampler : IDisposable
     /// <summary>Update-handler keys that could not be attributed to a plugin, capped at 200.</summary>
     public IReadOnlyCollection<string> UnattributedHandlers => this.unattributedHandlers;
 
+    /// <summary>Number of generation-2 GC collections since the process started.</summary>
+    public int GcGen2Collections => this.frameProbe.Gen2Collections;
+
+    /// <summary>Total milliseconds of GC pause since the process started.</summary>
+    public double GcTotalPauseMs => this.frameProbe.TotalPauseMs;
+
     /// <summary>Short warnings for probes whose Dalamud-side tracking switch is currently off.</summary>
     public IReadOnlyList<string> TrackingWarnings
     {
@@ -137,7 +143,7 @@ internal sealed class Sampler : IDisposable
     private void Tick()
     {
         var now = DateTime.UtcNow;
-        var frameMs = this.frameProbe.Tick();
+        var frame = this.frameProbe.Tick();
 
         if (this.roster.ConsumeDirty())
         {
@@ -151,7 +157,7 @@ internal sealed class Sampler : IDisposable
         this.DrainErrors();
         this.DrainHitches();
 
-        if (frameMs is null)
+        if (frame.FrameMs is null)
         {
             return;
         }
@@ -180,7 +186,7 @@ internal sealed class Sampler : IDisposable
         }
 
         var plugins = this.frameTimings.Select(kv => new PluginTiming(kv.Key, kv.Value.Draw, kv.Value.Update)).ToList();
-        foreach (var incident in this.Engine.Process(new FrameSample(now, frameMs.Value, plugins)))
+        foreach (var incident in this.Engine.Process(new FrameSample(now, frame.FrameMs.Value, plugins, frame.GcPauseMs)))
         {
             this.Handle(incident, now);
         }

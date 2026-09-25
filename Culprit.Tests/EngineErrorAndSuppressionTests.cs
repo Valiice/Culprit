@@ -121,7 +121,7 @@ public class EngineErrorAndSuppressionTests
     {
         var engine = new Engine(new Thresholds(), "Culprit") { Suppressed = true };
 
-        Assert.Empty(engine.Process(new FrameSample(T0, 500, [new PluginTiming("P", 400, 0)])));
+        Assert.Empty(engine.Process(new FrameSample(T0, 500, [new PluginTiming("P", 400, 0)], 0)));
         Assert.Null(engine.Process(Err("P")));
         Assert.Null(engine.Process(new HitchEvent(T0, "P", 500, 100, "Draw")));
         Assert.Null(engine.Snapshot("P"));
@@ -132,7 +132,7 @@ public class EngineErrorAndSuppressionTests
     {
         var engine = new Engine(new Thresholds(), "Culprit") { Paused = true };
 
-        Assert.Empty(engine.Process(new FrameSample(T0, 500, [new PluginTiming("P", 400, 0)])));
+        Assert.Empty(engine.Process(new FrameSample(T0, 500, [new PluginTiming("P", 400, 0)], 0)));
         Assert.Null(engine.Process(Err("P")));
         Assert.Null(engine.Process(new HitchEvent(T0, "P", 500, 100, "Draw")));
 
@@ -147,7 +147,7 @@ public class EngineErrorAndSuppressionTests
         var engine = new Engine(new Thresholds(), "Culprit");
         engine.Ignored.Add("noisy");
 
-        Assert.Empty(engine.Process(new FrameSample(T0, 10, [new PluginTiming("Noisy", 400, 0)])));
+        Assert.Empty(engine.Process(new FrameSample(T0, 10, [new PluginTiming("Noisy", 400, 0)], 0)));
         for (var i = 0; i < 6; i++)
         {
             Assert.Null(engine.Process(Err("Noisy", i)));
@@ -160,7 +160,7 @@ public class EngineErrorAndSuppressionTests
     public void Reset_ForgetsWindows()
     {
         var engine = new Engine(new Thresholds(), "Culprit");
-        engine.Process(new FrameSample(T0, 10, [new PluginTiming("P", 5, 5)]));
+        engine.Process(new FrameSample(T0, 10, [new PluginTiming("P", 5, 5)], 0));
         for (var i = 0; i < 4; i++)
         {
             engine.Process(Err("P", i));

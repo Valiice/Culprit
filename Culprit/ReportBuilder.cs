@@ -65,6 +65,8 @@ internal sealed class ReportBuilder
             DateTime.UtcNow,
             typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "unknown",
             typeof(Dalamud.Plugin.IDalamudPluginInterface).Assembly.GetName().Version?.ToString() ?? "unknown",
+            this.sampler.GcGen2Collections,
+            this.sampler.GcTotalPauseMs,
             this.sampler.Paused,
             probes,
             this.sampler.Engine.Thresholds,

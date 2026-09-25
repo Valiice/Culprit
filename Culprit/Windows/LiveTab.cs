@@ -117,6 +117,8 @@ internal sealed class LiveTab
             ImGui.TextDisabled("Attribution: indexing plugin assemblies");
         }
 
+        ImGui.TextDisabled($"GC: {this.sampler.GcGen2Collections.ToString(System.Globalization.CultureInfo.InvariantCulture)} gen2 collections, {this.sampler.GcTotalPauseMs.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} ms total pause");
+
         if (this.sampler.ReducedMode)
         {
             ImGui.TextColored(Colors.Warn, "Reduced mode: some signals are missing. Dalamud's internals may have changed; report the red line above.");

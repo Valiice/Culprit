@@ -13,7 +13,8 @@ public sealed record ReportIncident(
     DateTime Timestamp, string PluginDisplayName, string Rule, double Value, double Limit, string Detail, bool Notified);
 
 public sealed record ReportContext(
-    DateTime GeneratedUtc, string CulpritVersion, string DalamudVersion, bool Paused,
+    DateTime GeneratedUtc, string CulpritVersion, string DalamudVersion,
+    int GcGen2Collections, double GcTotalPauseMs, bool Paused,
     IReadOnlyList<ReportProbe> Probes, Thresholds Thresholds,
     IReadOnlyList<ReportPluginRow> Plugins, IReadOnlyList<ReportIncident> Incidents,
     IReadOnlyList<string> UnattributedHandlers);
@@ -32,6 +33,7 @@ public static class StatsReport
             $"Generated: {context.GeneratedUtc.ToString("yyyy-MM-dd HH:mm:ss", ci)} UTC",
             $"Culprit {context.CulpritVersion}, Dalamud {context.DalamudVersion}",
             $"Detection: {(context.Paused ? "paused" : "running")}",
+            $"GC: {context.GcGen2Collections.ToString(ci)} gen2 collections, {context.GcTotalPauseMs.ToString("0", ci)} ms total pause since load",
             string.Empty,
             "Probes",
         };

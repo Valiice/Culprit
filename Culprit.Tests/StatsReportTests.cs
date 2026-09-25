@@ -13,11 +13,15 @@ public class StatsReportTests
         IReadOnlyList<ReportProbe>? probes = null,
         IReadOnlyList<ReportPluginRow>? plugins = null,
         IReadOnlyList<ReportIncident>? incidents = null,
-        IReadOnlyList<string>? unattributedHandlers = null) =>
+        IReadOnlyList<string>? unattributedHandlers = null,
+        int gcGen2Collections = 0,
+        double gcTotalPauseMs = 0) =>
         new(
             T0,
             "1.2.3",
             "9.0.0",
+            gcGen2Collections,
+            gcTotalPauseMs,
             paused,
             probes ?? [],
             new Thresholds(),
@@ -105,6 +109,14 @@ public class StatsReportTests
 
         Assert.Contains("showing 0 of 0", text);
         Assert.Contains("\n  none", text);
+    }
+
+    [Fact]
+    public void GcLine_ReportsCollectionsAndTotalPause()
+    {
+        var text = StatsReport.Format(Context(gcGen2Collections: 4, gcTotalPauseMs: 812.3));
+
+        Assert.Contains("GC: 4 gen2 collections, 812 ms total pause since load", text);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Culprit.Core.Models;
 
 namespace Culprit.Core.Detection;
@@ -6,7 +7,12 @@ namespace Culprit.Core.Detection;
 /// Turns frame samples and error events into incidents. Pure: no clock, no I/O. The caller
 /// sets Suppressed (zoning, cutscene, grace period) and Paused (user command) before feeding it.
 /// Frames that crossed the stall limit are reported as stalls and left out of the sustained
-/// average, so one huge frame cannot echo as a Sustained incident.
+/// average, so one huge frame cannot echo as a Sustained incident. A frame whose GC pause
+/// accounts for at least half of its total time is treated as GC-heavy: every plugin's timing
+/// for that frame is contaminated (the GC pause could have landed in any handler), so it still
+/// updates Last/Longest but is excluded from the sustained average and never reported as a
+/// Stall or Sustained incident; a long GC-heavy frame is instead reported as one UnattributedStall
+/// whose Detail names the GC pause.
 /// </summary>
 public sealed class Engine
 {
@@ -50,6 +56,7 @@ public sealed class Engine
         var t = this.Thresholds;
         var incidents = new List<Incident>();
         var anyStall = false;
+        var gcHeavy = sample.GcPauseMs > 0 && sample.GcPauseMs >= sample.FrameMs * 0.5;
 
         foreach (var timing in sample.Plugins)
         {
@@ -59,6 +66,17 @@ public sealed class Engine
             }
 
             var window = this.Window(timing.InternalName);
+
+            if (gcHeavy)
+            {
+                // The GC pause could have landed in any handler, so this frame's timings are
+                // contaminated: still track Last/Longest, but keep them out of the sustained
+                // average and never turn them into a Stall or Sustained incident.
+                window.AddTiming(sample.Timestamp, timing.DrawMs, timing.UpdateMs, includeInAverage: false);
+                window.CompleteWindowIfDue(sample.Timestamp, t.SustainedWindowSeconds);
+                continue;
+            }
+
             var isStall = timing.DrawMs > t.StallMs || timing.UpdateMs > t.StallMs;
             window.AddTiming(sample.Timestamp, timing.DrawMs, timing.UpdateMs, includeInAverage: !isStall);
             var due = window.CompleteWindowIfDue(sample.Timestamp, t.SustainedWindowSeconds);
@@ -95,6 +113,17 @@ public sealed class Engine
         if (this.Paused)
         {
             return [];
+        }
+
+        if (gcHeavy)
+        {
+            if (sample.FrameMs > t.UnattributedMs)
+            {
+                var detail = string.Format(CultureInfo.InvariantCulture, "GC pause {0:0} ms", sample.GcPauseMs);
+                incidents.Add(new Incident(sample.Timestamp, null, IncidentRule.UnattributedStall, sample.FrameMs, t.UnattributedMs, detail));
+            }
+
+            return incidents;
         }
 
         if (!anyStall && sample.FrameMs > t.UnattributedMs)

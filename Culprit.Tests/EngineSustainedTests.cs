@@ -17,7 +17,7 @@ public class EngineSustainedTests
         for (var i = 0; i <= frames; i++)
         {
             var ts = start.AddMilliseconds(i * 16.667);
-            all.AddRange(engine.Process(new FrameSample(ts, 16, [new PluginTiming(plugin, drawMs, updateMs)])));
+            all.AddRange(engine.Process(new FrameSample(ts, 16, [new PluginTiming(plugin, drawMs, updateMs)], 0)));
         }
 
         return all;
@@ -63,7 +63,7 @@ public class EngineSustainedTests
     {
         var engine = new Engine(new Thresholds(), "Culprit");
         // 19 ms once (under the 20 ms stall limit), then quiet for the rest of the window.
-        engine.Process(new FrameSample(T0, 16, [new PluginTiming("Spiky", 19, 0)]));
+        engine.Process(new FrameSample(T0, 16, [new PluginTiming("Spiky", 19, 0)], 0));
 
         var incidents = Run(engine, "Spiky", 0.1, 0, 5.1, T0.AddMilliseconds(17));
 
@@ -84,8 +84,8 @@ public class EngineSustainedTests
     public void CurrentAverage_ReflectsTheOpenWindow()
     {
         var engine = new Engine(new Thresholds(), "Culprit");
-        engine.Process(new FrameSample(T0, 16, [new PluginTiming("P", 2, 2)]));
-        engine.Process(new FrameSample(T0.AddMilliseconds(16), 16, [new PluginTiming("P", 4, 4)]));
+        engine.Process(new FrameSample(T0, 16, [new PluginTiming("P", 2, 2)], 0));
+        engine.Process(new FrameSample(T0.AddMilliseconds(16), 16, [new PluginTiming("P", 4, 4)], 0));
 
         Assert.Equal(6, engine.Snapshot("P")!.CurrentAverageMs, 6);
     }
@@ -129,7 +129,7 @@ public class EngineSustainedTests
     public void HugeStallFrame_DoesNotEchoAsSustained()
     {
         var engine = new Engine(new Thresholds(), "Culprit");
-        var initial = engine.Process(new FrameSample(T0, 16, [new PluginTiming("Heavy", 600, 0)]));
+        var initial = engine.Process(new FrameSample(T0, 16, [new PluginTiming("Heavy", 600, 0)], 0));
 
         var incidents = initial.Concat(Run(engine, "Heavy", 0.1, 0, 5.2, T0.AddMilliseconds(17))).ToList();
 
@@ -141,7 +141,7 @@ public class EngineSustainedTests
     public void StallFrame_StillUpdatesLastAndLongest()
     {
         var engine = new Engine(new Thresholds(), "Culprit");
-        engine.Process(new FrameSample(T0, 16, [new PluginTiming("Heavy", 600, 0)]));
+        engine.Process(new FrameSample(T0, 16, [new PluginTiming("Heavy", 600, 0)], 0));
 
         Assert.Equal(600, engine.Snapshot("Heavy")!.LongestDrawMs);
         Assert.Equal(600, engine.Snapshot("Heavy")!.LastDrawMs);

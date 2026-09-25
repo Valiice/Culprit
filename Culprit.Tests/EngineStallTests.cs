@@ -10,7 +10,7 @@ public class EngineStallTests
     private static readonly DateTime T0 = new(2026, 9, 24, 12, 0, 0, DateTimeKind.Utc);
 
     private static FrameSample Frame(double frameMs, params PluginTiming[] plugins) =>
-        new(T0, frameMs, plugins);
+        new(T0, frameMs, plugins, 0);
 
     [Fact]
     public void DrawAboveStallMs_ProducesStallIncident()
@@ -137,7 +137,7 @@ public class EngineStallTests
         for (var i = 0; i < 3; i++)
         {
             var ts = T0.AddMilliseconds(i * 16);
-            incidents.AddRange(engine.Process(new FrameSample(ts, 30, [new PluginTiming("Heavy", 30, 0)])));
+            incidents.AddRange(engine.Process(new FrameSample(ts, 30, [new PluginTiming("Heavy", 30, 0)], 0)));
         }
 
         Assert.Single(incidents, i => i.Rule == IncidentRule.Stall);
@@ -152,10 +152,10 @@ public class EngineStallTests
         for (var i = 0; i < 3; i++)
         {
             var ts = T0.AddMilliseconds(i * 16);
-            incidents.AddRange(engine.Process(new FrameSample(ts, 30, [new PluginTiming("Heavy", 30, 0)])));
+            incidents.AddRange(engine.Process(new FrameSample(ts, 30, [new PluginTiming("Heavy", 30, 0)], 0)));
         }
 
-        incidents.AddRange(engine.Process(new FrameSample(T0.AddSeconds(1.1), 30, [new PluginTiming("Heavy", 30, 0)])));
+        incidents.AddRange(engine.Process(new FrameSample(T0.AddSeconds(1.1), 30, [new PluginTiming("Heavy", 30, 0)], 0)));
 
         Assert.Equal(2, incidents.Count(i => i.Rule == IncidentRule.Stall));
     }
