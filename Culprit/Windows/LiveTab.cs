@@ -112,6 +112,11 @@ internal sealed class LiveTab
             }
         }
 
+        if (this.roster.Indexing)
+        {
+            ImGui.TextDisabled("Attribution: indexing plugin assemblies");
+        }
+
         if (this.sampler.ReducedMode)
         {
             ImGui.TextColored(Colors.Warn, "Reduced mode: some signals are missing. Dalamud's internals may have changed; report the red line above.");
