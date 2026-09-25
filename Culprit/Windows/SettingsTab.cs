@@ -115,6 +115,30 @@ internal sealed class SettingsTab
             changed = true;
         }
 
+        var warnOnFirstIncident = this.config.WarnOnFirstIncident;
+        if (ImGui.Checkbox("Warn on the first incident", ref warnOnFirstIncident))
+        {
+            this.config.WarnOnFirstIncident = warnOnFirstIncident;
+            changed = true;
+        }
+
+        Tooltip("Off: a plugin must stall or drain twice within the repeat window before you get a toast, so one-off costs like opening a window stay quiet. Every incident is still recorded on the Incidents tab.");
+
+        if (!warnOnFirstIncident)
+        {
+            var repeatWindow = this.config.RepeatWindowMinutes;
+            if (SliderDouble("Repeat window (min)", ref repeatWindow, 1, 120, "%.0f"))
+            {
+                this.config.RepeatWindowMinutes = repeatWindow;
+                applied = true;
+            }
+
+            if (ImGui.IsItemDeactivatedAfterEdit())
+            {
+                changed = true;
+            }
+        }
+
         var notifyUnattributed = this.config.NotifyUnattributed;
         if (ImGui.Checkbox("Toast unattributed stalls", ref notifyUnattributed))
         {

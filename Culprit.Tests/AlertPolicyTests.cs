@@ -7,10 +7,13 @@ namespace Culprit.Tests;
 public class AlertPolicyTests
 {
     private static readonly DateTime T0 = new(2026, 9, 24, 12, 0, 0, DateTimeKind.Utc);
-    private static readonly AlertSettings Defaults = new(TimeSpan.FromMinutes(5), Muted: false, NotifyUnattributed: false);
+    private static readonly AlertSettings Defaults = new(TimeSpan.FromMinutes(5), Muted: false, NotifyUnattributed: false, WarnOnFirstIncident: true, RepeatWindow: TimeSpan.FromMinutes(10));
 
     private static Incident Stall(string? plugin, int secondsAfter = 0) =>
         new(T0.AddSeconds(secondsAfter), plugin, IncidentRule.Stall, 48, 20, "Draw");
+
+    private static Incident Sustained(string? plugin, int secondsAfter = 0) =>
+        new(T0.AddSeconds(secondsAfter), plugin, IncidentRule.Sustained, 4, 3, "5 s window");
 
     private static Incident Errors(string plugin, int secondsAfter = 0) =>
         new(T0.AddSeconds(secondsAfter), plugin, IncidentRule.Errors, 5, 5, "boom");
@@ -128,5 +131,67 @@ public class AlertPolicyTests
         policy.Reset();
 
         Assert.True(policy.Decide(Stall("A", 1), T0.AddSeconds(1)).Notify);
+    }
+
+    [Fact]
+    public void SecondStrike_FirstStallIsNotNotified()
+    {
+        var policy = new AlertPolicy(Defaults with { WarnOnFirstIncident = false, RepeatWindow = TimeSpan.FromMinutes(10) });
+
+        var d = policy.Decide(Stall("A"), T0);
+
+        Assert.False(d.Notify);
+    }
+
+    [Fact]
+    public void SecondStrike_SecondStallWithinWindowNotifiesWithSuppressedCount()
+    {
+        var policy = new AlertPolicy(Defaults with { WarnOnFirstIncident = false, RepeatWindow = TimeSpan.FromMinutes(10) });
+        policy.Decide(Stall("A"), T0);
+
+        var d = policy.Decide(Stall("A", 30), T0.AddSeconds(30));
+
+        Assert.True(d.Notify);
+        Assert.Equal(1, d.SuppressedSinceLast);
+    }
+
+    [Fact]
+    public void SecondStrike_SecondStallAfterWindowExpiresCountsAsNewFirst()
+    {
+        var policy = new AlertPolicy(Defaults with { WarnOnFirstIncident = false, RepeatWindow = TimeSpan.FromMinutes(10) });
+        policy.Decide(Stall("A"), T0);
+
+        var d = policy.Decide(Stall("A", 660), T0.AddMinutes(11));
+
+        Assert.False(d.Notify);
+    }
+
+    [Fact]
+    public void SecondStrike_ErrorsNotifyOnFirstOccurrenceEvenWithFlagFalse()
+    {
+        var policy = new AlertPolicy(Defaults with { WarnOnFirstIncident = false, RepeatWindow = TimeSpan.FromMinutes(10) });
+
+        var d = policy.Decide(Errors("A"), T0);
+
+        Assert.True(d.Notify);
+    }
+
+    [Fact]
+    public void SecondStrike_WhenWarnOnFirstIncidentTrue_FirstStallNotifies()
+    {
+        var policy = new AlertPolicy(Defaults with { WarnOnFirstIncident = true, RepeatWindow = TimeSpan.FromMinutes(10) });
+
+        var d = policy.Decide(Stall("A"), T0);
+
+        Assert.True(d.Notify);
+    }
+
+    [Fact]
+    public void SecondStrike_SustainedObeysTheSameRuleAsStall()
+    {
+        var policy = new AlertPolicy(Defaults with { WarnOnFirstIncident = false, RepeatWindow = TimeSpan.FromMinutes(10) });
+
+        Assert.False(policy.Decide(Sustained("A"), T0).Notify);
+        Assert.True(policy.Decide(Sustained("A", 30), T0.AddSeconds(30)).Notify);
     }
 }

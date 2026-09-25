@@ -25,6 +25,10 @@ public class Configuration : IPluginConfiguration
 
     public bool NotifyUnattributed { get; set; } = false;
 
+    public bool WarnOnFirstIncident { get; set; } = false;
+
+    public double RepeatWindowMinutes { get; set; } = 10;
+
     public bool Muted { get; set; } = false;
 
     public bool DebugLog { get; set; } = false;
@@ -55,6 +59,7 @@ public class Configuration : IPluginConfiguration
         config.ErrorWindowSeconds = Math.Clamp(config.ErrorWindowSeconds, 5, 600);
         config.UnattributedMs = Math.Clamp(config.UnattributedMs, 20, 1000);
         config.CooldownMinutes = Math.Clamp(config.CooldownMinutes, 0.1, 60);
+        config.RepeatWindowMinutes = Math.Clamp(config.RepeatWindowMinutes, 1, 120);
 
         return config;
     }
@@ -70,7 +75,9 @@ public class Configuration : IPluginConfiguration
     public AlertSettings ToAlertSettings() => new(
         TimeSpan.FromMinutes(this.CooldownMinutes),
         this.Muted,
-        this.NotifyUnattributed);
+        this.NotifyUnattributed,
+        this.WarnOnFirstIncident,
+        TimeSpan.FromMinutes(this.RepeatWindowMinutes));
 
     public void Save() => Services.PluginInterface.SavePluginConfig(this);
 }
