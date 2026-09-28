@@ -12,7 +12,11 @@ namespace Culprit.Core.Detection;
 /// for that frame is contaminated (the GC pause could have landed in any handler), so it still
 /// updates Last/Longest but is excluded from the sustained average and never reported as a
 /// Stall or Sustained incident; a long GC-heavy frame is instead reported as one UnattributedStall
-/// whose Detail names the GC pause.
+/// whose Detail names the GC pause. A plugin that keeps reaching the Errors threshold is a chronic
+/// offender: the interval between Errors incidents for that plugin doubles after each one (starting
+/// at ErrorWindowSeconds, capped at 60 minutes) and resets once the plugin goes a full hour without
+/// reaching the threshold, so a permanently broken plugin is reported less and less often instead of
+/// at a constant rate.
 /// </summary>
 public sealed class Engine
 {
@@ -137,6 +141,9 @@ public sealed class Engine
         return incidents;
     }
 
+    /// <summary>Cap on the Errors incident backoff interval, in seconds (60 minutes).</summary>
+    private const double MaxErrorsIncidentIntervalSeconds = 3600;
+
     public Incident? Process(ErrorEvent error)
     {
         if (this.Paused || this.Suppressed || error.InternalName is null || this.IsIgnored(error.InternalName))
@@ -152,12 +159,26 @@ public sealed class Engine
             return null;
         }
 
-        if (window.LastErrorsIncidentAt is { } last && (error.Timestamp - last).TotalSeconds < t.ErrorWindowSeconds)
+        // A plugin that has not reached the threshold in a full hour is no longer "chronic":
+        // the next incident starts the backoff over from the base interval.
+        if (window.LastErrorsThresholdAt is { } lastThreshold && (error.Timestamp - lastThreshold).TotalSeconds >= MaxErrorsIncidentIntervalSeconds)
+        {
+            window.ErrorsIncidentInterval = 0;
+        }
+
+        window.LastErrorsThresholdAt = error.Timestamp;
+
+        var interval = window.ErrorsIncidentInterval > 0 ? window.ErrorsIncidentInterval : t.ErrorWindowSeconds;
+        if (window.LastErrorsIncidentAt is { } last && (error.Timestamp - last).TotalSeconds < interval)
         {
             return null;
         }
 
         window.LastErrorsIncidentAt = error.Timestamp;
+        window.ErrorsIncidentInterval = window.ErrorsIncidentInterval > 0
+            ? Math.Min(window.ErrorsIncidentInterval * 2, MaxErrorsIncidentIntervalSeconds)
+            : t.ErrorWindowSeconds;
+
         return new Incident(error.Timestamp, error.InternalName, IncidentRule.Errors, count, t.ErrorCount, error.Message);
     }
 

@@ -80,6 +80,76 @@ public class EngineErrorAndSuppressionTests
     }
 
     [Fact]
+    public void ChronicOffender_ErrorsIncidentIntervalDoublesEachTime()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+        var fired = new List<Incident>();
+
+        for (var i = 0; fired.Count < 9; i++)
+        {
+            var incident = engine.Process(Err("Thrower", i));
+            if (incident is not null)
+            {
+                fired.Add(incident);
+            }
+        }
+
+        Assert.Equal(T0.AddSeconds(4), fired[0].Timestamp);
+        Assert.Equal(T0.AddSeconds(64), fired[1].Timestamp);
+        Assert.Equal(T0.AddSeconds(184), fired[2].Timestamp);
+        Assert.Equal(T0.AddSeconds(424), fired[3].Timestamp);
+        Assert.Equal(T0.AddSeconds(904), fired[4].Timestamp);
+        Assert.Equal(T0.AddSeconds(1864), fired[5].Timestamp);
+        Assert.Equal(T0.AddSeconds(3784), fired[6].Timestamp);
+        Assert.Equal(T0.AddSeconds(7384), fired[7].Timestamp);
+        Assert.Equal(T0.AddSeconds(10984), fired[8].Timestamp);
+
+        // Once the interval hits the 60-minute cap, incidents keep arriving exactly an hour apart.
+        Assert.Equal(3600, (fired[8].Timestamp - fired[7].Timestamp).TotalSeconds);
+    }
+
+    [Fact]
+    public void ChronicOffender_ResetsBackoffAfterAQuietHour()
+    {
+        var engine = new Engine(new Thresholds(), "Culprit");
+
+        for (var i = 0; i <= 64; i++)
+        {
+            engine.Process(Err("Thrower", i));
+        }
+
+        // Second incident fired at t=64 with the interval now doubled to 120 s for the next one.
+        Assert.Equal(64, (engine.Snapshot("Thrower")!.LastErrorsIncidentAt!.Value - T0).TotalSeconds);
+
+        // Quiet for over an hour: no more errors at all, so the threshold is never reached again
+        // until the plugin resumes.
+        var resumeAt = 64 + 3601;
+
+        Incident? first = null;
+        for (var i = 0; i <= 4; i++)
+        {
+            first = engine.Process(Err("Thrower", resumeAt + i));
+        }
+
+        Assert.NotNull(first);
+        Assert.Equal(T0.AddSeconds(resumeAt + 4), first!.Timestamp);
+
+        // The backoff reset, so the next incident needs only the base 60 s interval again, not 120 s.
+        Incident? second = null;
+        for (var i = 5; i <= 64; i++)
+        {
+            var incident = engine.Process(Err("Thrower", resumeAt + i));
+            if (incident is not null)
+            {
+                second = incident;
+            }
+        }
+
+        Assert.NotNull(second);
+        Assert.Equal(T0.AddSeconds(resumeAt + 64), second!.Timestamp);
+    }
+
+    [Fact]
     public void UnattributedError_IsDropped()
     {
         var engine = new Engine(new Thresholds(), "Culprit");

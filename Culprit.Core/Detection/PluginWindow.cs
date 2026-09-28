@@ -23,6 +23,16 @@ public sealed class PluginWindow
     /// <summary>When the last Errors incident was emitted for this plugin, so the engine can rate-limit them.</summary>
     public DateTime? LastErrorsIncidentAt { get; set; }
 
+    /// <summary>
+    /// Seconds the engine currently waits between Errors incidents for this plugin. Zero means
+    /// no incident has fired yet, so the engine falls back to Thresholds.ErrorWindowSeconds.
+    /// Doubles after each consecutive incident and is capped at 60 minutes; see Engine.
+    /// </summary>
+    public double ErrorsIncidentInterval { get; set; }
+
+    /// <summary>When the error count for this plugin last reached the Errors threshold, incident emitted or not; used to reset the backoff after an hour of quiet.</summary>
+    public DateTime? LastErrorsThresholdAt { get; set; }
+
     /// <summary>Mean of the current window, or of the last completed one while the current is empty.</summary>
     public double CurrentAverageMs => this.samples.Count == 0 ? this.lastCompletedAverage : this.samples.Average();
 

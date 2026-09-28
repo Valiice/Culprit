@@ -28,6 +28,8 @@ The Live tab shows each plugin's latest and longest draw and update times, its 5
 - Errors: a plugin logged at least the error count within the error window (default 5 in 60 s).
 - Unattributed: the whole frame was long but no plugin crossed the stall limit. Logged, not shown, unless you enable it.
 
+A plugin that keeps misbehaving is reported less and less often, doubling the gap each time up to an hour, so a permanently broken plugin does not spam you.
+
 By default a plugin must stall or drain twice within 10 minutes before Culprit shows a toast, so a one-off cost like a plugin opening a window for the first time stays quiet; the Incidents tab still records every occurrence.
 
 Culprit stays quiet while zoning, in cutscenes, and for 5 seconds after any plugin loads or unloads, and for 5 seconds after a zone change finishes.
