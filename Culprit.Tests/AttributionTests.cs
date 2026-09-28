@@ -112,6 +112,29 @@ public class AttributionTests
     }
 
     [Fact]
+    public void HandlerKeyMap_PluginCount_CountsDistinctResolvedPlugins()
+    {
+        var map = new HandlerKeyMap();
+        map.Add("A.Type::OnUpdate", "PluginA");
+        map.Add("A.Type::OnDraw", "PluginA");
+        map.Add("B.Type::OnUpdate", "PluginB");
+
+        Assert.Equal(2, map.PluginCount);
+    }
+
+    [Fact]
+    public void HandlerKeyMap_AmbiguousKeys_ListsConflictingKeysOnly()
+    {
+        var map = new HandlerKeyMap();
+        map.Add("A.Type::OnUpdate", "PluginA");
+        map.Add("Shared.Type::OnUpdate", "First");
+        map.Add("Shared.Type::OnUpdate", "Second");
+
+        Assert.Equal(["Shared.Type::OnUpdate"], map.AmbiguousKeys);
+        Assert.Equal(1, map.PluginCount);
+    }
+
+    [Fact]
     public void HandlerResolver_PrefersTheMapOverTheTypeIndex()
     {
         var map = new HandlerKeyMap();

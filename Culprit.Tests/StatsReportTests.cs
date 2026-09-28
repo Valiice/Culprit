@@ -15,7 +15,10 @@ public class StatsReportTests
         IReadOnlyList<ReportIncident>? incidents = null,
         IReadOnlyList<string>? unattributedHandlers = null,
         int gcGen2Collections = 0,
-        double gcTotalPauseMs = 0) =>
+        double gcTotalPauseMs = 0,
+        int handlerMapPlugins = 0,
+        int handlerMapKeys = 0,
+        IReadOnlyList<string>? ambiguousHandlers = null) =>
         new(
             T0,
             "1.2.3",
@@ -27,7 +30,10 @@ public class StatsReportTests
             new Thresholds(),
             plugins ?? [],
             incidents ?? [],
-            unattributedHandlers ?? []);
+            unattributedHandlers ?? [],
+            handlerMapPlugins,
+            handlerMapKeys,
+            ambiguousHandlers ?? []);
 
     [Fact]
     public void Header_ContainsBothVersionsAndPausedState()
@@ -122,9 +128,12 @@ public class StatsReportTests
     [Fact]
     public void Format_ListsUnattributedHandlers()
     {
-        var text = StatsReport.Format(Context(unattributedHandlers: ["InventoryTools.Services.OverlayService::FrameworkOnUpdate", "Other.Type::OnUpdate"]));
+        var text = StatsReport.Format(Context(
+            unattributedHandlers: ["InventoryTools.Services.OverlayService::FrameworkOnUpdate", "Other.Type::OnUpdate"],
+            handlerMapPlugins: 12,
+            handlerMapKeys: 34));
 
-        Assert.Contains("Unattributed update handlers (2)", text);
+        Assert.Contains("Unattributed update handlers (2; handler map knows 12 plugins and 34 keys)", text);
         var lines = text.Split('\n');
         Assert.Contains(lines, l => l == "  InventoryTools.Services.OverlayService::FrameworkOnUpdate");
         Assert.Contains(lines, l => l == "  Other.Type::OnUpdate");
@@ -135,7 +144,25 @@ public class StatsReportTests
     {
         var text = StatsReport.Format(Context());
 
-        Assert.Contains("Unattributed update handlers (0)\n  none", text);
+        Assert.Contains("Unattributed update handlers (0; handler map knows 0 plugins and 0 keys)\n  none", text);
+    }
+
+    [Fact]
+    public void Format_ListsAmbiguousHandlers()
+    {
+        var text = StatsReport.Format(Context(ambiguousHandlers: ["Shared.Type::OnUpdate"]));
+
+        Assert.Contains("Ambiguous update handlers (1)", text);
+        var lines = text.Split('\n');
+        Assert.Contains(lines, l => l == "  Shared.Type::OnUpdate");
+    }
+
+    [Fact]
+    public void Format_NoAmbiguousHandlers_PrintsNone()
+    {
+        var text = StatsReport.Format(Context());
+
+        Assert.Contains("Ambiguous update handlers (0)\n  none", text);
     }
 
     [Fact]

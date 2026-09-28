@@ -182,9 +182,14 @@ internal sealed class Sampler : IDisposable
         {
             if (this.roster.Resolver.Resolve(reading.HandlerKey) is not { } name)
             {
+                // A key the handler map has an answer for but couldn't settle (added under two
+                // different plugins) is ambiguous, not unknown: it is reported separately, from
+                // HandlerMap.AmbiguousKeys, so it should not also spend the unattributed cap.
                 // While the background index is still filling in, everything looks unattributed;
                 // recording those would spend the cap on keys that are only temporarily unknown.
-                if (!this.roster.Indexing && this.unattributedHandlers.Count < MaxUnattributedHandlers)
+                if (!this.roster.Indexing
+                    && !this.roster.HandlerMap.Contains(reading.HandlerKey)
+                    && this.unattributedHandlers.Count < MaxUnattributedHandlers)
                 {
                     this.unattributedHandlers.Add(reading.HandlerKey);
                 }

@@ -72,7 +72,10 @@ internal sealed class ReportBuilder
             this.sampler.Engine.Thresholds,
             this.Rows(),
             incidents,
-            this.sampler.UnattributedHandlers.OrderBy(k => k, StringComparer.Ordinal).ToList());
+            this.sampler.UnattributedHandlers.OrderBy(k => k, StringComparer.Ordinal).ToList(),
+            this.roster.HandlerMap.PluginCount,
+            this.roster.HandlerMap.Count,
+            this.roster.HandlerMap.AmbiguousKeys.OrderBy(k => k, StringComparer.Ordinal).ToList());
 
         return StatsReport.Format(context);
     }

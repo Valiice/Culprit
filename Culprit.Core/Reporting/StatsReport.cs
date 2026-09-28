@@ -17,7 +17,8 @@ public sealed record ReportContext(
     int GcGen2Collections, double GcTotalPauseMs, bool Paused,
     IReadOnlyList<ReportProbe> Probes, Thresholds Thresholds,
     IReadOnlyList<ReportPluginRow> Plugins, IReadOnlyList<ReportIncident> Incidents,
-    IReadOnlyList<string> UnattributedHandlers);
+    IReadOnlyList<string> UnattributedHandlers,
+    int HandlerMapPlugins, int HandlerMapKeys, IReadOnlyList<string> AmbiguousHandlers);
 
 /// <summary>Renders a plain text stats report for sharing or for a tool to read from disk.</summary>
 public static class StatsReport
@@ -69,7 +70,9 @@ public static class StatsReport
         }
 
         lines.Add(string.Empty);
-        lines.Add($"Unattributed update handlers ({context.UnattributedHandlers.Count.ToString(ci)})");
+        lines.Add(
+            $"Unattributed update handlers ({context.UnattributedHandlers.Count.ToString(ci)}; "
+            + $"handler map knows {context.HandlerMapPlugins.ToString(ci)} plugins and {context.HandlerMapKeys.ToString(ci)} keys)");
         if (context.UnattributedHandlers.Count == 0)
         {
             lines.Add("  none");
@@ -77,6 +80,20 @@ public static class StatsReport
         else
         {
             foreach (var key in context.UnattributedHandlers)
+            {
+                lines.Add($"  {Clean(key)}");
+            }
+        }
+
+        lines.Add(string.Empty);
+        lines.Add($"Ambiguous update handlers ({context.AmbiguousHandlers.Count.ToString(ci)})");
+        if (context.AmbiguousHandlers.Count == 0)
+        {
+            lines.Add("  none");
+        }
+        else
+        {
+            foreach (var key in context.AmbiguousHandlers)
             {
                 lines.Add($"  {Clean(key)}");
             }

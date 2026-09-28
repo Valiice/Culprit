@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace Culprit.Core.Attribution;
 
 /// <summary>
@@ -13,6 +15,12 @@ public sealed class HandlerKeyMap
     private readonly HashSet<string> ambiguous = new(StringComparer.Ordinal);
 
     public int Count => this.map.Count;
+
+    /// <summary>Distinct internal names that resolved at least one key.</summary>
+    public int PluginCount => this.map.Values.Distinct(StringComparer.Ordinal).Count();
+
+    /// <summary>Keys added under two different internal names, so they resolve to null.</summary>
+    public IReadOnlyCollection<string> AmbiguousKeys => this.ambiguous;
 
     public void Add(string handlerKey, string internalName)
     {
