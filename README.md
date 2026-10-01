@@ -1,16 +1,21 @@
 # Culprit
 
+[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Valiice/Culprit/total?style=flat-square&color=blue)](https://github.com/Valiice/Culprit/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/Valiice/Culprit?include_prereleases&style=flat-square&color=green)](https://github.com/Valiice/Culprit/releases/latest)
+[![GitHub Issues](https://img.shields.io/github/issues/Valiice/Culprit?style=flat-square)](https://github.com/Valiice/Culprit/issues)
+[![Download Latest Zip](https://img.shields.io/badge/Download-Latest%20Zip-blue?style=flat-square)](https://github.com/Valiice/Culprit/releases/latest/download/Culprit.zip)
+
 Finds the plugin behind your stutter.
 
 Culprit watches every other Dalamud plugin's draw time, update time and error output. When one of them stalls a frame, eats frame time steadily, or throws repeatedly, Culprit shows a Dalamud notification naming that plugin.
 
 ## Installation
 
-This is a private plugin. Build it and load it as a dev plugin:
+1. Add my custom plugin repository: [https://raw.githubusercontent.com/Valiice/DalamudPluginRepo/master/repo.json](https://github.com/Valiice/DalamudPluginRepo)
+2. Search for **Culprit** in the Plugin Installer.
+3. Install and Enable.
 
-1. Build with `dotnet build Culprit/Culprit.csproj -c Release`.
-2. In the game, open `/xlsettings`, go to Experimental, and add the folder `Culprit/bin/Release/Culprit` as a dev plugin location.
-3. Open `/xlplugins`, find Culprit under Dev Tools, and enable it.
+Not on the official repo. Alternatively, build with `dotnet build Culprit/Culprit.csproj -c Release` and load `Culprit/bin/Release/Culprit` as a dev plugin.
 
 ## Usage
 

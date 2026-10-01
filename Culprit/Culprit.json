@@ -5,6 +5,6 @@
   "Punchline": "Finds the plugin behind your stutter.",
   "Description": "Watches every other plugin's draw and update time and error output. When one of them stalls a frame, eats frame time steadily, or throws repeatedly, Culprit names it in a notification so you know which plugin to look at.",
   "ApplicableVersion": "any",
-  "RepoUrl": "",
+  "RepoUrl": "https://github.com/Valiice/Culprit",
   "Tags": ["performance", "stutter", "diagnostics", "watchdog"]
 }
